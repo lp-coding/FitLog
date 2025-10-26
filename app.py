@@ -12,9 +12,21 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 
 db = SQLAlchemy(app)
 
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html', title="FitLog – Trainingsplantracker")
+    return render_template("index.html")
 
-if __name__ == '__main__':
+@app.route("/plan/new")
+def plan_new():
+    return render_template("plan_new.html")
+
+@app.route("/plan/edit")
+def plan_edit():
+    return render_template("plan_edit.html")
+
+@app.route("/training")
+def training():
+    return render_template("training.html")
+
+if __name__ == "__main__":
     app.run(debug=True)

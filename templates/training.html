@@ -1,10 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}FitLog – Training erfassen{% endblock %}
+{% block content %}
+<h5 class="mb-4">Training erfassen (Platzhalter)</h5>
 
-</body>
-</html>
+<form class="bg-white border rounded p-3">
+  <div class="row g-3">
+    <div class="col-12 col-md-4">
+      <label class="form-label">Übung</label>
+      <select class="form-select">
+        <option>Butterfly</option>
+        <option>Bankdrücken</option>
+        <option>Kniebeugen</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label">Gewicht [kg]</label>
+      <input type="number" class="form-control" value="20">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label">Wdh.</label>
+      <input type="number" class="form-control" value="10">
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label">Notiz</label>
+      <input type="text" class="form-control" placeholder="…">
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end gap-2 mt-3">
+    <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">Abbrechen</a>
+    <a class="btn btn-primary" href="{{ url_for('index') }}">Speichern</a>
+  </div>
+</form>
+{% endblock %}

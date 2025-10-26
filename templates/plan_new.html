@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}FitLog – Trainingsplan hinzufügen{% endblock %}
+{% block content %}
+
+<!-- Formular ist rein statisch – noch ohne POST/DB. Später per Flask anbinden. -->
+<div class="mb-3">
+  <label class="form-label">Name des Trainingsplans</label>
+  <input type="text" class="form-control" placeholder="Name des Trainingsplans">
+</div>
+
+<!-- Tabellenkopf wie in deiner Skizze -->
+<div class="table-responsive">
+  <table class="table align-middle bg-white">
+    <thead>
+      <tr>
+        <th style="width:40%">Name der Übung</th>
+        <th style="width:10%">Sätze</th>
+        <th style="width:15%">Wiederholungen</th>
+        <th style="width:15%">Gewicht [kg]</th>
+        <th style="width:15%">Notiz</th>
+        <th style="width:5%" class="text-end">
+          <button id="addRow" class="btn btn-sm btn-primary" type="button">+</button>
+        </th>
+      </tr>
+    </thead>
+    <tbody id="exerciseBody">
+      <!-- Start mit 1 Zeile -->
+      <tr>
+        <td>
+          <div class="input-group">
+            <span class="input-group-text">=</span>
+            <select class="form-select">
+              <option>Butterfly</option>
+              <option>Reverse Butterfly</option>
+              <option>Bankdrücken</option>
+              <option>Kniebeugen</option>
+              <option>Latzug</option>
+            </select>
+          </div>
+        </td>
+        <td><input type="number" class="form-control" value="3" min="1"></td>
+        <td><input type="number" class="form-control" value="10" min="1"></td>
+        <td><input type="text" class="form-control" value="20"></td>
+        <td><input type="text" class="form-control" placeholder="…"></td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary removeRow" type="button">x</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="d-flex justify-content-end gap-2 mt-3">
+  <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">Abbrechen</a>
+  <a class="btn btn-primary" href="{{ url_for('index') }}">Speichern</a>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Mini-Helper zum Hinzufügen/Entfernen von Zeilen (Mockup-only, kein Persistieren).
+  const body = document.getElementById('exerciseBody');
+  document.getElementById('addRow').addEventListener('click', () => {
+    const tpl = body.querySelector('tr').cloneNode(true);
+    tpl.querySelectorAll('input').forEach(i => { if(i.type!=='number') i.value=''; });
+    body.appendChild(tpl);
+    bindRemove();
+  });
+  function bindRemove(){
+    body.querySelectorAll('.removeRow').forEach(btn=>{
+      btn.onclick = () => { if (body.rows.length>1) btn.closest('tr').remove(); };
+    });
+  }
+  bindRemove();
+</script>
+{% endblock %}
