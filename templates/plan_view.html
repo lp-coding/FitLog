@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}FitLog – Plan ansehen{% endblock %}
+{% block content %}
+  <a href="{{ url_for('index') }}" class="btn btn-link px-0">&larr; Zurück</a>
+  <h2 class="mb-3">Trainingsplan: {{ plan.name }}</h2>
+
+  <table class="table table-striped bg-white">
+    <thead>
+      <tr>
+        <th>Übung</th><th>Sätze</th><th>Wdh.</th><th>Gewicht [kg]</th><th class="text-end">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pex in exercises %}
+        <tr>
+          <td>{{ pex.exercise.name }}</td>
+          <td>{{ pex.sets }}</td>
+          <td>{{ pex.reps }}</td>
+          <td>{{ pex.default_weight }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-success"
+               href="{{ url_for('training', plan_id=plan.id, pex_id=pex.id) }}">Trainieren</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
