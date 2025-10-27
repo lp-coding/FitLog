@@ -1,59 +1,132 @@
-from flask import Flask, render_template, url_for, redirect
+"""
+FitLog – Der Trainingsplantracker
+---------------------------------
+Flask-basierte Webanwendung zur Verwaltung von Trainingsplänen und Übungen.
 
-app = Flask(__name__)
-app.config["DEBUG"] = True  # Auto-Reload der Templates
+Funktionen (aktuell implementiert):
+- Datenbank-Initialisierung mit SQLAlchemy
+- Beispiel-Routen für Startseite, Planübersicht und Plan-Erstellung
+- Robuste SQLite-Integration mit automatischer Ordnererstellung
+"""
 
-# --- FAKE-DATEN statt DB (nur für Mockup) ---
-PLANS = [
-    {"id": 1, "name": "Push/Pull/Beine"},
-    {"id": 2, "name": "Oberkörper/Unterkörper"},
-    {"id": 3, "name": "Ganzkörper"},
-]
+from flask import Flask, render_template, request, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+import os
 
-PLAN_EXERCISES = {
-    1: [  # Plan 1
-        {"id": 101, "name": "Bankdrücken", "sets": 3, "reps": 10, "weight": 60, "note": ""},
-        {"id": 102, "name": "Kniebeugen", "sets": 3, "reps": 8, "weight": 80, "note": ""},
-    ],
-    2: [
-        {"id": 201, "name": "Latzug", "sets": 3, "reps": 10, "weight": 50, "note": ""},
-    ],
-    3: [
-        {"id": 301, "name": "Butterfly", "sets": 3, "reps": 12, "weight": 20, "note": ""},
-    ],
-}
+# ------------------------------------------------------------
+# Flask & Datenbank-Konfiguration
+# ------------------------------------------------------------
 
-# --- ROUTES ---
+# Flask-App mit instance-relative Pfad (enthält z. B. die SQLite-DB)
+app = Flask(__name__, instance_relative_config=True)
+
+# Stelle sicher, dass der "instance"-Ordner existiert (sonst kann SQLite nicht schreiben!)
+os.makedirs(app.instance_path, exist_ok=True)
+
+# Erstelle absoluten Pfad zur SQLite-Datenbank
+db_path = os.path.join(app.instance_path, "fitlog.db")
+db_uri = "sqlite:///" + db_path.replace("\\", "/")
+
+# Flask-Konfiguration
+app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = "dev"  # später evtl. aus .env laden
+
+# Datenbank-Objekt
+db = SQLAlchemy(app)
+
+
+# ------------------------------------------------------------
+# Datenbank-Modelle
+# ------------------------------------------------------------
+
+class Trainingsplan(db.Model):
+    __tablename__ = "trainingsplaene"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+    # Beziehung zu Übungen
+    uebungen = db.relationship("Uebung", backref="trainingsplan", lazy=True)
+
+    def __repr__(self):
+        return f"<Trainingsplan {self.name}>"
+
+
+class Uebung(db.Model):
+    __tablename__ = "uebungen"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    standardgewicht = db.Column(db.Float, nullable=True)
+
+    plan_id = db.Column(db.Integer, db.ForeignKey("trainingsplaene.id"), nullable=False)
+
+    def __repr__(self):
+        return f"<Uebung {self.name} ({self.standardgewicht} kg)>"
+
+
+# ------------------------------------------------------------
+# Hilfsfunktionen
+# ------------------------------------------------------------
+
+def init_db():
+    """Erzeugt die Datenbanktabellen, falls sie nicht existieren."""
+    with app.app_context():
+        if not os.path.exists(db_path):
+            print(f"[FitLog] Neue SQLite-DB wird angelegt unter:\n → {db_path}")
+        db.create_all()
+        print("[FitLog] Datenbank initialisiert.")
+
+
+# ------------------------------------------------------------
+# Routen
+# ------------------------------------------------------------
+
 @app.route("/")
 def index():
-    return render_template("index.html", plans=PLANS)
+    """Startseite"""
+    return render_template("index.html") if os.path.exists("templates/index.html") else "<h1>Willkommen bei FitLog!</h1><p><a href='/plaene'>→ Zu den Trainingsplänen</a></p>"
 
-@app.route("/plan/<int:plan_id>")
-def plan_view(plan_id: int):
-    plan = next((p for p in PLANS if p["id"] == plan_id), None)
-    exercises = PLAN_EXERCISES.get(plan_id, [])
-    return render_template("plan_view.html", plan=plan, exercises=exercises)
 
-@app.route("/plan/new")
-def plan_new():
-    return render_template("plan_new.html")
+@app.route("/plaene")
+def plaene():
+    """Zeigt alle vorhandenen Trainingspläne."""
+    plaene = Trainingsplan.query.all()
+    html = "<h1>Trainingspläne</h1><ul>"
+    for p in plaene:
+        html += f"<li>{p.name}</li>"
+    html += "</ul><a href='/neu'>Neuen Plan anlegen</a>"
+    return html
 
-@app.route("/plan/<int:plan_id>/edit")
-def plan_edit(plan_id: int):
-    plan = next((p for p in PLANS if p["id"] == plan_id), None)
-    exercises = PLAN_EXERCISES.get(plan_id, [])
-    return render_template("plan_edit.html", plan=plan, exercises=exercises)
 
-@app.route("/training/<int:plan_id>/<int:exercise_id>")
-def training(plan_id: int, exercise_id: int):
-    # Platzhalter: Zeige Formular für genau diese Übung des Plans
-    plan = next((p for p in PLANS if p["id"] == plan_id), None)
-    exercise = None
-    for ex in PLAN_EXERCISES.get(plan_id, []):
-        if ex["id"] == exercise_id:
-            exercise = ex
-            break
-    return render_template("training.html", plan=plan, exercise=exercise)
+@app.route("/neu", methods=["GET", "POST"])
+def neuer_plan():
+    """Ermöglicht das Anlegen eines neuen Trainingsplans."""
+    if request.method == "POST":
+        name = request.form.get("name")
+        if name:
+            neuer_plan = Trainingsplan(name=name)
+            db.session.add(neuer_plan)
+            db.session.commit()
+            return redirect(url_for("plaene"))
+        else:
+            return "<p>Bitte Namen eingeben!</p>"
+    return '''
+        <h1>Neuen Trainingsplan anlegen</h1>
+        <form method="post">
+            <input type="text" name="name" placeholder="Planname">
+            <input type="submit" value="Erstellen">
+        </form>
+        <a href="/plaene">Zurück</a>
+    '''
+
+
+# ------------------------------------------------------------
+# App-Startpunkt
+# ------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run()
+    init_db()  # DB anlegen, falls nicht vorhanden
+    print(f"[FitLog] Läuft mit Datenbank: {db_path}")
+    app.run(debug=True)
