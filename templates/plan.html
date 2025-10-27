@@ -1,36 +1,28 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8">
-  <title>FitLog – Trainingsplan</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-  <div class="container py-5">
-    <a href="index.html" class="btn btn-secondary mb-4">&larr; Zurück</a>
-    <h2 class="mb-4">Trainingsplan: Push/Pull/Beine</h2>
+{% extends "base.html" %}
+{% block title %}FitLog – Plan ansehen{% endblock %}
+{% block content %}
+  <a href="{{ url_for('index') }}" class="btn btn-link px-0">&larr; Zurück</a>
+  <h2 class="mb-3">Trainingsplan: {{ plan.name }}</h2>
 
-    <table class="table table-striped">
-      <thead>
+  <table class="table table-striped bg-white">
+    <thead>
+      <tr>
+        <th>Übung</th><th>Sätze</th><th>Wdh.</th><th>Gewicht [kg]</th><th class="text-end">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ex in exercises %}
         <tr>
-          <th>Übung</th>
-          <th>Standardgewicht</th>
-          <th>Aktion</th>
+          <td>{{ ex.name }}</td>
+          <td>{{ ex.sets }}</td>
+          <td>{{ ex.reps }}</td>
+          <td>{{ ex.weight }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-success"
+               href="{{ url_for('training', plan_id=plan.id, exercise_id=ex.id) }}">Trainieren</a>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Bankdrücken</td>
-          <td>60 kg</td>
-          <td><a href="training.html" class="btn btn-success btn-sm">Trainieren</a></td>
-        </tr>
-        <tr>
-          <td>Kniebeugen</td>
-          <td>80 kg</td>
-          <td><a href="training.html" class="btn btn-success btn-sm">Trainieren</a></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</body>
-</html>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
