@@ -11,15 +11,15 @@
       </tr>
     </thead>
     <tbody>
-      {% for ex in exercises %}
+      {% for pex in exercises %}
         <tr>
-          <td>{{ ex.name }}</td>
-          <td>{{ ex.sets }}</td>
-          <td>{{ ex.reps }}</td>
-          <td>{{ ex.weight }}</td>
+          <td>{{ pex.exercise.name }}</td>
+          <td>{{ pex.sets }}</td>
+          <td>{{ pex.reps }}</td>
+          <td>{{ pex.default_weight }}</td>
           <td class="text-end">
             <a class="btn btn-sm btn-success"
-               href="{{ url_for('training', plan_id=plan.id, exercise_id=ex.id) }}">Trainieren</a>
+               href="{{ url_for('training', plan_id=plan.id, pex_id=pex.id) }}">Trainieren</a>
           </td>
         </tr>
       {% endfor %}
