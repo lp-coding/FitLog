@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Plan: {{ plan.name }}</h2>
+
+<h3>Übungen</h3>
+<ul>
+    {% for ex in plan.exercises %}
+      <li>
+        {{ ex.name }} – Standard: {{ ex.default_weight }} kg
+        <form method="post" action="{{ url_for('plans.remove_exercise', plan_id=plan.id) }}" style="display:inline">
+            <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+            <button type="submit">Entfernen</button>
+        </form>
+      </li>
+    {% else %}
+      <li>Keine Übungen im Plan.</li>
+    {% endfor %}
+</ul>
+
+<h3>Übung hinzufügen</h3>
+<form method="post" action="{{ url_for('plans.add_exercise', plan_id=plan.id) }}">
+    <select name="exercise_id">
+        {% for e in all_exercises %}
+            <option value="{{ e.id }}">{{ e.name }}</option>
+        {% endfor %}
+    </select>
+    <input type="number" step="0.5" name="default_weight" placeholder="Standardgewicht (kg)">
+    <button type="submit">Hinzufügen</button>
+</form>
+
+<p>
+  <a href="{{ url_for('training.start', plan_id=plan.id) }}">Training starten</a> |
+  <a href="{{ url_for('progress.plan_progress', plan_id=plan.id) }}">Fortschritt anzeigen</a>
+</p>
+{% endblock %}
