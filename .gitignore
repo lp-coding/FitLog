@@ -1,10 +1,58 @@
+# --- Python / Flask ---
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+*.log
+
+# Virtual Environment
 .venv/
+env/
+venv/
+
+# Flask Instance Folder (contains DB + secrets)
+instance/
+!instance/.gitkeep   # Falls du leeren Ordner behalten willst
+
+# SQLite database files
+*.db
+*.sqlite3
+
+# Environment files
+.env
+*.env
+
+# Matplotlib / Charts output
+fitlog/static/plots/*.png
+fitlog/static/plots/*.jpg
+
+# IDE & OS
 .idea/
-
-instance/*
-!instance/.gitignore
-
+.vscode/
+*.swp
 .DS_Store
+Thumbs.db
+
+# Migrations
+migrations/
+!migrations/.gitkeep
+
+# Byte-compiled / Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Reports / Build
+dist/
+build/
+*.egg-info/
+
+# pytest / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# PDF or export files (if created later)
+*.pdf
+*.docx
+*.xlsx
