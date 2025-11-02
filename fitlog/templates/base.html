@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}FitLog{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    header { margin-bottom: 1rem; }
+    .flash { padding: .6rem .8rem; border-radius: .5rem; margin: .5rem 0; }
+    .flash.success { background:#e8fff0; border:1px solid #8ad1a4; }
+    .flash.error { background:#fff0f0; border:1px solid #e09da0; }
+    form.inline { display:flex; gap:.5rem; margin:1rem 0; }
+    input[type="text"] { flex:1; padding:.5rem .6rem; }
+    button { padding:.5rem .8rem; cursor:pointer; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:.5rem; border-bottom:1px solid #eee; text-align:left; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>FitLog</h1>
+  <nav>
+    <a href="{{ url_for('plans.list_plans_page') }}">Pläne</a>
+    &middot; <a href="/health">Health</a>
+  </nav>
+</header>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}
+  {% if msgs %}
+    {% for cat, msg in msgs %}
+      <div class="flash {{cat}}">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
