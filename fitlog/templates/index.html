@@ -114,10 +114,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!ok) return;
 
     try {
-      await fetch(`/plans/${id}/delete`, { method: 'POST' });
-      window.location.reload();
+        const res = await fetch(`/plans/${id}/delete`, { method: 'POST' });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.msg || 'Löschen/Archivieren fehlgeschlagen.');
+        }
     } catch (e) {
-      alert('Löschen/Archivieren fehlgeschlagen.');
+    alert('Netzwerkfehler beim Löschen.');
     }
   }
 

@@ -30,15 +30,19 @@ def create_app(test_config: dict | None = None) -> Flask:
         from .db import get_db
         db = get_db()
 
-        plans = db.execute("SELECT id, name FROM training_plans ORDER BY name").fetchall()
+        plans = db.execute(
+            "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY name"
+        ).fetchall()
+
         last_session = db.execute(
             """
             SELECT s.id, s.started_at, s.ended_at, p.name AS plan_name
             FROM sessions s
-            JOIN training_plans p ON p.id = s.plan_id
+                     JOIN training_plans p ON p.id = s.plan_id
             ORDER BY COALESCE(s.ended_at, s.started_at) DESC LIMIT 1
             """
         ).fetchone()
+
         return render_template("index.html", plans=plans, last_session=last_session)
 
     from .blueprints.plans import bp as plans_bp

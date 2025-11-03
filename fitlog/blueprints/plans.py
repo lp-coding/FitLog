@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
 from ..db import get_db
 
@@ -8,7 +9,7 @@ def list_plans():
     """JSON: alle Trainingspläne."""
     db = get_db()
     rows = db.execute(
-        "SELECT id, name FROM training_plans ORDER BY id DESC"
+        "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -16,7 +17,7 @@ def list_plans():
 def list_plans_page():
     """HTML: Liste der Trainingspläne."""
     db = get_db()
-    rows = db.execute("SELECT id, name FROM training_plans ORDER BY id DESC").fetchall()
+    rows = db.execute("SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
     return render_template("plans/list.html", plans=rows)
 
 @bp.post("/create")
@@ -99,3 +100,22 @@ def add_exercise(plan_id: int):
         flash("Diese Übung ist in diesem Plan bereits enthalten.", "error")
 
     return redirect(url_for("plans.plan_detail", plan_id=plan_id))
+
+@bp.post("/<int:plan_id>/delete")
+def delete_plan(plan_id: int):
+    db = get_db()
+    plan = db.execute(
+        "SELECT id, name, deleted_at FROM training_plans WHERE id = ?",
+        (plan_id,),
+    ).fetchone()
+    if not plan:
+        return jsonify({"ok": False, "msg": "Plan nicht gefunden."}), 404
+    if plan["deleted_at"]:
+        return jsonify({"ok": False, "msg": "Plan bereits archiviert."}), 409
+
+    db.execute(
+        "UPDATE training_plans SET deleted_at = ? WHERE id = ?",
+        (datetime.utcnow().isoformat(timespec="seconds"), plan_id),
+    )
+    db.commit()
+    return jsonify({"ok": True, "msg": f"Plan „{plan['name']}“ archiviert."})
