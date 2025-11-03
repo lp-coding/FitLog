@@ -1,4 +1,3 @@
-# fitlog/blueprints/plans.py
 from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
 from ..db import get_db
 
