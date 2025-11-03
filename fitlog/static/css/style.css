@@ -134,7 +134,7 @@ table.kv td { padding: .35rem .5rem; }
 
 /* Full-width action */
 .full { margin-top: 2rem; text-align: center; }
-.full .btn { width: 100%; padding: 1rem; font-size: 1.05rem; }
+.full .btn { padding: 1rem 2rem; font-size: 1.05rem; justify-content: center; }
 
 /* Focus sichtbarer machen (A11y) */
 :focus-visible {
