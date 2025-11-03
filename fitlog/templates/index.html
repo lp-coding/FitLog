@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}FitLog – Start{% endblock %}
+{% block title %}FitLog – Der Fitnesstracker{% endblock %}
 
 {% block content %}
 <div class="grid">
@@ -21,8 +21,8 @@
       </select>
 
       <div class="btn-row" role="group" aria-label="Plan-Aktionen">
-        <button id="deleteBtn" class="btn" disabled aria-disabled="true">Löschen</button>
-        <button id="editBtn" class="btn" disabled aria-disabled="true">Bearbeiten</button>
+        <button id="deleteBtn" class="btn" disabled>Löschen</button>
+        <button id="editBtn" class="btn" disabled="true">Bearbeiten</button>
         <a class="btn" href="{{ url_for('plans.list_plans_page') }}">Alle anzeigen</a>
       </div>
     </div>
@@ -73,30 +73,57 @@ document.addEventListener('DOMContentLoaded', function () {
   const editBtn = document.getElementById('editBtn');
   const startBtn = document.getElementById('startBtn');
 
+  function setEnabledButton(btn, enabled) {
+    // Für <button>:
+    if (btn.tagName === 'BUTTON') {
+      btn.disabled = !enabled;
+    }
+    // Einheitliche A11y- & Style-Umschaltung:
+    if (enabled) {
+      btn.removeAttribute('aria-disabled');
+      btn.classList.remove('disabled');
+    } else {
+      btn.setAttribute('aria-disabled', 'true');
+      btn.classList.add('disabled');
+    }
+  }
+
   function updateActions() {
     const selectedId = select.value;
     const hasSelection = !!selectedId;
 
-    deleteBtn.disabled = !hasSelection;
-    editBtn.disabled = !hasSelection;
+    setEnabledButton(deleteBtn, hasSelection);
+    setEnabledButton(editBtn, hasSelection);
 
-    // Start-Button „aktivieren“ und Link auf die Detailseite setzen
+    // Start-Button (Anchor) aktivieren + Ziel setzen
     if (hasSelection) {
-      startBtn.classList.remove('disabled');
-      startBtn.setAttribute('aria-disabled', 'false');
-      startBtn.href = '/plans/' + selectedId;  // aktuell zur Plan-Detailseite
+      startBtn.href = '/plans/' + selectedId;    // später: /sessions/start?plan_id=...
       startBtn.title = 'Training mit ausgewähltem Plan starten';
+      setEnabledButton(startBtn, true);
     } else {
-      startBtn.classList.add('disabled');
-      startBtn.setAttribute('aria-disabled', 'true');
       startBtn.href = '#';
       startBtn.title = 'Plan wählen, um zu starten';
+      setEnabledButton(startBtn, false);
     }
   }
 
-  // Initial und bei Änderung aktualisieren
-  updateActions();
+  async function handleDelete() {
+    const id = select.value;
+    if (!id) return;
+    const ok = confirm('Diesen Trainingsplan wirklich archivieren?');
+    if (!ok) return;
+
+    try {
+      await fetch(`/plans/${id}/delete`, { method: 'POST' });
+      window.location.reload();
+    } catch (e) {
+      alert('Löschen/Archivieren fehlgeschlagen.');
+    }
+  }
+
+  updateActions();                       // initialen Zustand setzen
   select.addEventListener('change', updateActions);
+  deleteBtn.addEventListener('click', handleDelete);
 });
 </script>
 {% endblock %}
