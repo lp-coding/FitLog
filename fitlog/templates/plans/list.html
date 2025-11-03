@@ -18,7 +18,11 @@
         {% for p in plans %}
         <tr>
           <td>{{ p.id }}</td>
-          <td>{{ p.name }}</td>
+            <td>
+            <a href="{{ url_for('plans.plan_detail', plan_id=p.id) }}">
+                {{ p.name }}
+            </a>
+        </td>
         </tr>
         {% endfor %}
       </tbody>
