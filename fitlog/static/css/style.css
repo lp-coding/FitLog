@@ -1,0 +1,143 @@
+/* === FitLog Global Styles === */
+:root{
+  --bg: #f7f7f9;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --text: #222;
+  --muted: #666;
+  --primary: #0d6efd;
+  --primary-600: #0b5ed7;
+  --primary-50: #e7f1ff;
+  --shadow: 0 2px 6px rgba(0,0,0,.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+
+body {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+h1 { font-size: 2.25rem; margin: 0 0 .5rem; letter-spacing: .2px; }
+h2 { margin: 0 0 .75rem; }
+h3 { margin: .25rem 0 1rem; }
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header { margin-bottom: 1rem; }
+
+/* Flash messages */
+.flash { padding: .6rem .8rem; border-radius: .5rem; margin: .5rem 0; border: 1px solid transparent; }
+.flash.success { background:#e8fff0; border-color:#8ad1a4; }
+.flash.error   { background:#fff0f0; border-color:#e09da0; }
+
+/* Layout */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+@media (max-width: 720px){
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+/* Forms & listbox */
+form.inline { display: flex; gap: .5rem; margin: .75rem 0; }
+input[type="text"]{
+  flex: 1;
+  padding: .55rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+input[type="text"]:focus{
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
+
+.listbox{
+  width: 100%;
+  height: 12rem;
+  padding: .4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* Buttons */
+button, .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .55rem .9rem;
+  font-size: .95rem;
+  line-height: 1;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f7f7f7;
+  color: #111;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .15s, border-color .15s, box-shadow .15s, color .15s;
+}
+button:hover, .btn:hover { background: #efefef; }
+
+.btn.primary{
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn.primary:hover{ background: var(--primary-600); }
+
+/* Disabled (für <button disabled> UND <a class="btn disabled">) */
+button:disabled,
+.btn[aria-disabled="true"],
+.btn.disabled{
+  opacity: .8;
+  background: #f2f4f7;
+  border-color: #d5d9e0;
+  color: #8b94a3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button-Reihen */
+.btn-row { display: flex; gap: .6rem; margin-top: .6rem; }
+.btn-col { display: flex; flex-direction: column; gap: .6rem; align-items: flex-start; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+th, td { padding: .5rem; border-bottom: 1px solid var(--border); text-align: left; }
+table.kv td { padding: .35rem .5rem; }
+
+.muted { color: var(--muted); }
+
+/* Full-width action */
+.full { margin-top: 2rem; text-align: center; }
+.full .btn { width: 100%; padding: 1rem; font-size: 1.05rem; }
+
+/* Focus sichtbarer machen (A11y) */
+:focus-visible {
+  outline: 3px solid var(--primary-50);
+  outline-offset: 2px;
+}

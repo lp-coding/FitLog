@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}FitLog – Start{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <!-- Linke Spalte: Trainingspläne -->
+  <div class="card">
+    <h3>Trainingspläne</h3>
+
+    <form action="{{ url_for('plans.create_plan') }}" method="post" class="inline" aria-label="Neuen Trainingsplan anlegen">
+      <input type="text" name="name" placeholder="Neuer Planname" required>
+      <button class="btn">Hinzufügen</button>
+    </form>
+
+    <div>
+      <!-- WICHTIG: Kein onchange-Redirect mehr – nur Auswahl! -->
+      <select id="planSelect" class="listbox" size="10" aria-label="Vorhandene Trainingspläne">
+        {% for p in plans %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="btn-row" role="group" aria-label="Plan-Aktionen">
+        <button id="deleteBtn" class="btn" disabled aria-disabled="true">Löschen</button>
+        <button id="editBtn" class="btn" disabled aria-disabled="true">Bearbeiten</button>
+        <a class="btn" href="{{ url_for('plans.list_plans_page') }}">Alle anzeigen</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rechte Spalte: Verlauf + letztes Training -->
+  <div class="card">
+    <h3>Verlauf</h3>
+    <div class="btn-col">
+      <a class="btn" href="#" title="Kommt später">Verbrauchte Kalorien</a>
+      <a class="btn" href="#" title="Kommt später">Trainingsfortschritt</a>
+    </div>
+
+    <h3 style="margin-top:1.25rem;">Letztes Training</h3>
+    {% if last_session %}
+      <table class="kv">
+        <tr><td class="muted">Datum:</td><td>{{ last_session.started_at }}</td></tr>
+        <tr><td class="muted">Trainingsplan:</td><td>{{ last_session.plan_name }}</td></tr>
+        <tr>
+          <td class="muted">Dauer:</td>
+          <td>
+            {% if last_session.ended_at %}
+              {{ last_session.started_at }} – {{ last_session.ended_at }}
+            {% else %}
+              in Bearbeitung / Dauer folgt
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    {% else %}
+      <p class="muted">Noch keine Trainingseinheit erfasst.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="full">
+  <!-- Start-Button ist sichtbar und wird aktiv, sobald ein Plan selektiert ist -->
+  <a id="startBtn" class="btn primary disabled" href="#" aria-disabled="true" title="Plan wählen, um zu starten">
+    Trainingsdaten erfassen
+  </a>
+</div>
+
+<!-- Kleines, pures JS: aktiviert Buttons erst bei Auswahl -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const select = document.getElementById('planSelect');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const editBtn = document.getElementById('editBtn');
+  const startBtn = document.getElementById('startBtn');
+
+  function updateActions() {
+    const selectedId = select.value;
+    const hasSelection = !!selectedId;
+
+    deleteBtn.disabled = !hasSelection;
+    editBtn.disabled = !hasSelection;
+
+    // Start-Button „aktivieren“ und Link auf die Detailseite setzen
+    if (hasSelection) {
+      startBtn.classList.remove('disabled');
+      startBtn.setAttribute('aria-disabled', 'false');
+      startBtn.href = '/plans/' + selectedId;  // aktuell zur Plan-Detailseite
+      startBtn.title = 'Training mit ausgewähltem Plan starten';
+    } else {
+      startBtn.classList.add('disabled');
+      startBtn.setAttribute('aria-disabled', 'true');
+      startBtn.href = '#';
+      startBtn.title = 'Plan wählen, um zu starten';
+    }
+  }
+
+  // Initial und bei Änderung aktualisieren
+  updateActions();
+  select.addEventListener('change', updateActions);
+});
+</script>
+{% endblock %}
