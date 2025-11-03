@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Trainingspläne – FitLog{% endblock %}
+
+{% block content %}
+  <h2>Trainingspläne</h2>
+
+  <form class="inline" action="{{ url_for('plans.create_plan') }}" method="post">
+    <input type="text" name="name" placeholder="Neuer Planname" required>
+    <button type="submit">Anlegen</button>
+  </form>
+
+  {% if plans %}
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th></tr>
+      </thead>
+      <tbody>
+        {% for p in plans %}
+        <tr>
+          <td>{{ p.id }}</td>
+            <td>
+            <a href="{{ url_for('plans.plan_detail', plan_id=p.id) }}">
+                {{ p.name }}
+            </a>
+        </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Noch keine Trainingspläne vorhanden.</p>
+  {% endif %}
+{% endblock %}
