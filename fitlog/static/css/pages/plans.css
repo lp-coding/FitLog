@@ -1,0 +1,29 @@
+.plan-edit__header {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .75rem 0 1rem;
+}
+.plan-edit__name {
+  flex: 1 1 auto;
+  max-width: 28rem;
+}
+.table--dnd .dnd-row__handle {
+  cursor: grab;
+  color: #888;
+  text-align: center;
+  width: 1.5rem;
+}
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+.add-ex__form {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-top: 1rem;
+}

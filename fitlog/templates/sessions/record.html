@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% set title = "Training erfassen – " ~ sess.plan_name %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h2>{{ title }}</h2>
+
+<form method="post" action="{{ url_for('sessions.finish_session', session_id=sess.id) }}">
+
+  <!-- Header: Startzeit (read-only) + optionale Dauer -->
+  <div class="card" style="margin-bottom:1rem;">
+    <div style="display:flex; gap:2rem; align-items:flex-end; flex-wrap:wrap;">
+      <div>
+        <label class="label">Gestartet am</label>
+        <div class="readonly">
+          {{ sess.started_at or "-" }}
+        </div>
+      </div>
+      <div>
+        <label for="duration_minutes_override" class="label">Dauer (Minuten, optional)</label>
+        <input id="duration_minutes_override"
+               name="duration_minutes_override"
+               type="number" min="0" step="1" placeholder="z. B. 45">
+        <div class="hint">Leer lassen = automatisch (Start → Beenden).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabelle: Übung | Wdh. | Gewicht | Notiz -->
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th style="width:32%;">Übung</th>
+        <th style="width:14%;">Wdh.</th>
+        <th style="width:18%;">Gewicht (kg)</th>
+        <th>Notiz</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>
+          {{ it.name }}
+          <input type="hidden" name="exercise_id" value="{{ it.exercise_id }}">
+        </td>
+        <td>
+          <input type="number"
+                 name="reps_{{ it.exercise_id }}"
+                 min="0" step="1"
+                 value="{{ it.reps }}">
+        </td>
+        <td>
+          <input type="number"
+                 name="weight_{{ it.exercise_id }}"
+                 min="0" step="0.5"
+                 value="{{ it.weight_kg }}">
+        </td>
+        <td>
+          <input type="text"
+                 name="note_{{ it.exercise_id }}"
+                 value="{{ it.note or '' }}"
+                 placeholder="optional">
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="actions" style="display:flex; gap:0.5rem; justify-content:flex-end;">
+    <!-- Abbrechen: nichts speichern -->
+    <button class="btn btn-secondary"
+            formaction="{{ url_for('sessions.abort_session', session_id=sess.id) }}"
+            formmethod="post">Abbrechen</button>
+
+    <button class="btn btn-primary" type="submit">Training beenden</button>
+  </div>
+</form>
+
+<style>
+  .label { font-weight:600; display:block; margin-bottom:.25rem; }
+  .readonly { padding:.375rem .5rem; background:#f7f7f8; border:1px solid #e8e8ea; border-radius:.375rem; min-height:2.25rem; }
+  .hint { color:#6b7280; font-size:.875rem; margin-top:.25rem; }
+</style>
+{% endblock %}

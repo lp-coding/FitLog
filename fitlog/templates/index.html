@@ -1,134 +1,177 @@
 {% extends "base.html" %}
-{% block title %}FitLog – Der Fitnesstracker{% endblock %}
+{% block title %}FitLog – Start{% endblock %}
 
 {% block content %}
-<div class="grid">
+<div class="start-grid">
   <!-- Linke Spalte: Trainingspläne -->
-  <div class="card">
-    <h3>Trainingspläne</h3>
+  <section>
+    <h2>Trainingspläne</h2>
 
-    <form action="{{ url_for('plans.create_plan') }}" method="post" class="inline" aria-label="Neuen Trainingsplan anlegen">
-      <input type="text" name="name" placeholder="Neuer Planname" required>
-      <button class="btn">Hinzufügen</button>
-    </form>
+    <!-- Listbox mit Plänen -->
+    <select id="planList" size="8" class="listbox">
+      {% for p in plans %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+      {% else %}
+        <option disabled>(Noch keine Trainingspläne)</option>
+      {% endfor %}
+    </select>
 
-    <div>
-      <!-- WICHTIG: Kein onchange-Redirect mehr – nur Auswahl! -->
-      <select id="planSelect" class="listbox" size="10" aria-label="Vorhandene Trainingspläne">
-        {% for p in plans %}
-          <option value="{{ p.id }}">{{ p.name }}</option>
-        {% endfor %}
-      </select>
-
-      <div class="btn-row" role="group" aria-label="Plan-Aktionen">
-        <button id="deleteBtn" class="btn" disabled>Löschen</button>
-        <button id="editBtn" class="btn" disabled="true">Bearbeiten</button>
-        <a class="btn" href="{{ url_for('plans.list_plans_page') }}">Alle anzeigen</a>
-      </div>
+    <!-- Buttonreihe: Löschen / Bearbeiten / Hinzufügen -->
+    <div class="row gap">
+      <button id="btnDelete"  type="button">Löschen</button>
+      <button id="btnEdit"    type="button">Bearbeiten</button>
+      <button id="btnAdd"     type="button">Hinzufügen</button>
     </div>
-  </div>
+  </section>
 
-  <!-- Rechte Spalte: Verlauf + letztes Training -->
-  <div class="card">
-    <h3>Verlauf</h3>
-    <div class="btn-col">
-      <a class="btn" href="#" title="Kommt später">Verbrauchte Kalorien</a>
-      <a class="btn" href="#" title="Kommt später">Trainingsfortschritt</a>
+  <!-- Rechte Spalte: Verlauf -->
+  <section>
+    <h2>Verlauf</h2>
+
+    <div class="col gap">
+      <button type="button">Verbrauchte Kalorien</button>
+      <button type="button">Trainingsfortschritt</button>
     </div>
 
-    <h3 style="margin-top:1.25rem;">Letztes Training</h3>
-    {% if last_session %}
-      <table class="kv">
-        <tr><td class="muted">Datum:</td><td>{{ last_session.started_at }}</td></tr>
-        <tr><td class="muted">Trainingsplan:</td><td>{{ last_session.plan_name }}</td></tr>
-        <tr>
-          <td class="muted">Dauer:</td>
-          <td>
-            {% if last_session.ended_at %}
-              {{ last_session.started_at }} – {{ last_session.ended_at }}
-            {% else %}
-              in Bearbeitung / Dauer folgt
-            {% endif %}
-          </td>
-        </tr>
-      </table>
-    {% else %}
-      <p class="muted">Noch keine Trainingseinheit erfasst.</p>
-    {% endif %}
-  </div>
+    <h3>Letztes Training:</h3>
+    <div class="last-box">
+      {% if last_session %}
+        <div class="kv">
+          <div>Datum:</div>         <div>{{ last_session.date }}</div>
+          <div>Trainingsplan:</div> <div>{{ last_session.plan_name }}</div>
+          <div>Dauer:</div>         <div>{{ last_session.duration_min }} min</div>
+        </div>
+      {% else %}
+        <div class="kv">
+          <div>Datum:</div>         <div>–</div>
+          <div>Trainingsplan:</div> <div>–</div>
+          <div>Dauer:</div>         <div>–</div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
 </div>
 
-<div class="full">
-  <!-- Start-Button ist sichtbar und wird aktiv, sobald ein Plan selektiert ist -->
-  <a id="startBtn" class="btn primary disabled" href="#" aria-disabled="true" title="Plan wählen, um zu starten">
-    Trainingsdaten erfassen
-  </a>
+<!-- Großer Button unten zentriert -->
+<div class="center">
+    <button id="btnRecord" class="big" type="button" aria-disabled="true" disabled>
+        Trainingsdaten erfassen
+    </button>
 </div>
 
-<!-- Kleines, pures JS: aktiviert Buttons erst bei Auswahl -->
+
+<!-- Minimaler, seiten-lokaler Stil genau für diese „klassische“ Ansicht -->
+<style>
+  .start-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items:start;
+  }
+  @media (max-width: 900px){ .start-grid{ grid-template-columns:1fr; } }
+
+  .listbox{
+    width:100%;
+    height:auto;
+    min-height:210px;
+    border:1px solid #bbb;
+    background:#fff;
+    padding:2px;
+  }
+
+  .row{ display:flex; }
+  .col{ display:flex; flex-direction:column; }
+  .gap{ gap:.6rem; margin-top:.6rem; }
+
+  button{
+    padding:.45rem .8rem;
+    border:1px solid #bdbdbd;
+    background:#efefef;
+    cursor:pointer;
+  }
+  button:hover{ background:#e3e3e3; }
+
+  .last-box{
+    border:1px solid #000;
+    padding:.5rem .6rem;
+    margin-top:.4rem;
+    background:#fff;
+  }
+  .kv{
+    display:grid;
+    grid-template-columns: 8rem 1fr;
+    row-gap:.25rem;
+    column-gap:.75rem;
+    font-size:.95rem;
+  }
+
+  .center{ text-align:center; margin-top:2rem; }
+  .big{
+    padding:.9rem 2.2rem;
+    border:1px solid #000;
+    background:#efefef;
+    font-size:1rem;
+  }
+</style>
+
+<!-- Verhalten der drei Buttons -->
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  const select = document.getElementById('planSelect');
-  const deleteBtn = document.getElementById('deleteBtn');
-  const editBtn = document.getElementById('editBtn');
-  const startBtn = document.getElementById('startBtn');
+  const list = document.getElementById('planList');
+  const btnRecord = document.getElementById('btnRecord');
 
-  function setEnabledButton(btn, enabled) {
-    // Für <button>:
-    if (btn.tagName === 'BUTTON') {
-      btn.disabled = !enabled;
-    }
-    // Einheitliche A11y- & Style-Umschaltung:
-    if (enabled) {
-      btn.removeAttribute('aria-disabled');
-      btn.classList.remove('disabled');
-    } else {
-      btn.setAttribute('aria-disabled', 'true');
-      btn.classList.add('disabled');
-    }
+  // aktuelles Auswahl-Handling
+  const selId = () => list && list.value ? list.value : null;
+
+  function updateRecordButton() {
+    const hasSel = !!selId();
+    btnRecord.disabled = !hasSel;
+    btnRecord.setAttribute('aria-disabled', String(!hasSel));
   }
 
-  function updateActions() {
-    const selectedId = select.value;
-    const hasSelection = !!selectedId;
+  // initial & on change
+  updateRecordButton();
+  list && list.addEventListener('change', updateRecordButton);
 
-    setEnabledButton(deleteBtn, hasSelection);
-    setEnabledButton(editBtn, hasSelection);
+  // „Erfassen“-Button klick → /sessions/new?plan_id=<id>
+  btnRecord.addEventListener('click', () => {
+    const id = selId();
+    if (!id) return; // sollte durch disabled nicht passieren
+    window.location.href = "{{ url_for('sessions.new_session') }}" + "?plan_id=" + encodeURIComponent(id);
+  });
 
-    // Start-Button (Anchor) aktivieren + Ziel setzen
-    if (hasSelection) {
-      startBtn.href = '/plans/' + selectedId;    // später: /sessions/start?plan_id=...
-      startBtn.title = 'Training mit ausgewähltem Plan starten';
-      setEnabledButton(startBtn, true);
-    } else {
-      startBtn.href = '#';
-      startBtn.title = 'Plan wählen, um zu starten';
-      setEnabledButton(startBtn, false);
-    }
-  }
+  // Bearbeiten -> /plans/<id>/edit
+  document.getElementById('btnEdit').addEventListener('click', () => {
+    const id = selId();
+    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
+    window.location.href = "{{ url_for('plans.edit_plan', plan_id=0) }}".replace('0', id);
+  });
 
-  async function handleDelete() {
-    const id = select.value;
-    if (!id) return;
-    const ok = confirm('Diesen Trainingsplan wirklich archivieren?');
-    if (!ok) return;
+  // Löschen (Soft-Delete) -> POST /plans/<id>/delete
+  document.getElementById('btnDelete').addEventListener('click', async () => {
+    const id = selId();
+    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
+    if (!confirm('Diesen Plan wirklich archivieren (Soft-Delete)?')) return;
+    try{
+      const res = await fetch(`/plans/${id}/delete`, { method:'POST' });
+      if(res.ok) location.reload();
+      else alert('Löschen fehlgeschlagen.');
+    }catch{ alert('Netzwerkfehler beim Löschen.'); }
+  });
 
-    try {
-        const res = await fetch(`/plans/${id}/delete`, { method: 'POST' });
-        if (res.ok) {
-          window.location.reload();
-        } else {
-          const data = await res.json().catch(() => ({}));
-          alert(data.msg || 'Löschen/Archivieren fehlgeschlagen.');
-        }
-    } catch (e) {
-    alert('Netzwerkfehler beim Löschen.');
-    }
-  }
-
-  updateActions();                       // initialen Zustand setzen
-  select.addEventListener('change', updateActions);
-  deleteBtn.addEventListener('click', handleDelete);
-});
+  // Hinzufügen -> Prompt für Namen -> POST /plans/create (next=/)
+  document.getElementById('btnAdd').addEventListener('click', async () => {
+    const name = (prompt('Name des neuen Plans:') || '').trim();
+    if (!name) return;
+    try{
+      const form = new URLSearchParams({ name, next: "{{ url_for('index') }}" });
+      const res = await fetch("{{ url_for('plans.create_plan') }}", {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+        body: form.toString()
+      });
+      if(res.redirected){ window.location.href = res.url; }
+      else { location.reload(); }
+    }catch{ alert('Anlegen fehlgeschlagen.'); }
+  });
 </script>
 {% endblock %}

@@ -1,33 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Trainingspläne – FitLog{% endblock %}
+{% block title %}Trainingspläne{% endblock %}
 
 {% block content %}
-  <h2>Trainingspläne</h2>
+<h2>Trainingspläne</h2>
 
-  <form class="inline" action="{{ url_for('plans.create_plan') }}" method="post">
-    <input type="text" name="name" placeholder="Neuer Planname" required>
-    <button type="submit">Anlegen</button>
-  </form>
+<form class="inline" action="{{ url_for('plans.create_plan') }}" method="post">
+  <input type="text" name="name" placeholder="Neuer Planname" required>
+  <input type="hidden" name="next" value="{{ url_for('plans.list_plans_page') }}">
+  <button type="submit" class="btn primary">Anlegen</button>
+</form>
 
-  {% if plans %}
-    <table>
-      <thead>
-        <tr><th>ID</th><th>Name</th></tr>
-      </thead>
-      <tbody>
-        {% for p in plans %}
-        <tr>
-          <td>{{ p.id }}</td>
-            <td>
-            <a href="{{ url_for('plans.plan_detail', plan_id=p.id) }}">
-                {{ p.name }}
-            </a>
-        </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>Noch keine Trainingspläne vorhanden.</p>
-  {% endif %}
+{% if plans %}
+  <table class="kv">
+    <thead><tr><th style="width:5rem;">ID</th><th>Name</th><th style="width:12rem;">Aktion</th></tr></thead>
+    <tbody>
+      {% for p in plans %}
+      <tr>
+        <td>#{{ p.id }}</td>
+        <td><a href="{{ url_for('plans.edit_plan', plan_id=p.id) }}">{{ p.name }}</a></td>
+        <td><a class="btn" href="{{ url_for('plans.edit_plan', plan_id=p.id) }}">Bearbeiten</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="muted">Noch keine Trainingspläne vorhanden.</p>
+{% endif %}
 {% endblock %}
