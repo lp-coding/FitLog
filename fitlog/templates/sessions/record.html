@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Erfassen – {{ sess.plan_name }}{% endblock %}
+
+{% block content %}
+<h2>Erfassen: {{ sess.plan_name }}</h2>
+
+<form id="recordForm" action="{{ url_for('sessions.save_session', session_id=sess.id) }}" method="post">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Übung</th>
+        <th style="width:10rem;">Gewicht (kg)</th>
+        <th style="width:8rem;">Wdh.</th>
+        <th>Notiz</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td>
+          {{ it.name }}
+          <input type="hidden" name="exercise_id" value="{{ it.exercise_id }}">
+        </td>
+        <td><input type="number" step="0.5" name="weight_{{ it.exercise_id }}" value="{{ it.weight_kg }}"></td>
+        <td><input type="number" name="reps_{{ it.exercise_id }}" value="{{ it.reps }}" min="0"></td>
+        <td><input type="text" name="note_{{ it.exercise_id }}" value="{{ it.note }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="actions">
+    <a class="btn" href="{{ url_for('index') }}">Abbrechen</a>
+    <button class="btn" type="submit">Zwischenspeichern</button>
+    <button class="btn primary" formaction="{{ url_for('sessions.finish_session', session_id=sess.id) }}" formmethod="post">
+      Training beenden
+    </button>
+  </div>
+</form>
+
+<style>
+  .tbl{width:100%;border-collapse:collapse}
+  .tbl th,.tbl td{padding:.5rem;border-bottom:1px solid #e5e7eb}
+  .actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem}
+  .btn{padding:.5rem .9rem;border:1px solid #ddd;border-radius:8px;background:#fff}
+  .btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+  input[type="number"],input[type="text"]{width:100%;padding:.45rem .55rem;border:1px solid #e5e7eb;border-radius:8px}
+</style>
+{% endblock %}

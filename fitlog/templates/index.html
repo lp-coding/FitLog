@@ -2,117 +2,154 @@
 {% block title %}FitLog – Start{% endblock %}
 
 {% block content %}
-<h1 class="logo">FitLog</h1>
-
-<div class="dashboard">
-  <!-- Linkes Card: Trainingspläne -->
-  <section class="card">
+<div class="start-grid">
+  <!-- Linke Spalte: Trainingspläne -->
+  <section>
     <h2>Trainingspläne</h2>
 
-    <!-- Anlegen -->
-    <div class="add-row">
-      <input id="newPlanName" class="input" type="text" placeholder="Neuer Planname">
-      <form id="createForm" action="{{ url_for('plans.create_plan') }}" method="post" style="display:inline;">
-        <input type="hidden" name="name" id="newPlanNameHidden">
-        <button id="btnAdd" class="btn" type="submit">Hinzufügen</button>
-      </form>
-    </div>
-
-    <!-- Liste -->
-    <select id="planSelect" class="list" size="10">
+    <!-- Listbox mit Plänen -->
+    <select id="planList" size="8" class="listbox">
       {% for p in plans %}
         <option value="{{ p.id }}">{{ p.name }}</option>
       {% else %}
-        <option disabled>(Noch keine Trainingspläne vorhanden)</option>
+        <option disabled>(Noch keine Trainingspläne)</option>
       {% endfor %}
     </select>
 
-    <!-- Aktionen -->
-    <div class="actions">
-      <button id="btnDelete" class="btn" type="button">Löschen</button>
-      <button id="btnEdit"   class="btn" type="button">Bearbeiten</button>
-      <a class="btn" href="{{ url_for('plans.list_plans_page') }}">Alle anzeigen</a>
+    <!-- Buttonreihe: Löschen / Bearbeiten / Hinzufügen -->
+    <div class="row gap">
+      <button id="btnDelete"  type="button">Löschen</button>
+      <button id="btnEdit"    type="button">Bearbeiten</button>
+      <button id="btnAdd"     type="button">Hinzufügen</button>
     </div>
   </section>
 
-  <!-- Rechtes Card: Verlauf (Platzhalter) -->
-  <section class="card">
+  <!-- Rechte Spalte: Verlauf -->
+  <section>
     <h2>Verlauf</h2>
-    <div class="stack">
-      <button class="btn" type="button">Verbrauchte Kalorien</button>
-      <button class="btn" type="button">Trainingsfortschritt</button>
+
+    <div class="col gap">
+      <button type="button">Verbrauchte Kalorien</button>
+      <button type="button">Trainingsfortschritt</button>
     </div>
 
-    <h3>Letztes Training</h3>
-    <p class="muted">Noch keine Trainingseinheit erfasst.</p>
+    <h3>Letztes Training:</h3>
+    <div class="last-box">
+      {% if last_session %}
+        <div class="kv">
+          <div>Datum:</div>         <div>{{ last_session.date }}</div>
+          <div>Trainingsplan:</div> <div>{{ last_session.plan_name }}</div>
+          <div>Dauer:</div>         <div>{{ last_session.duration_min }} min</div>
+        </div>
+      {% else %}
+        <div class="kv">
+          <div>Datum:</div>         <div>–</div>
+          <div>Trainingsplan:</div> <div>–</div>
+          <div>Dauer:</div>         <div>–</div>
+        </div>
+      {% endif %}
+    </div>
   </section>
 </div>
 
-<div class="centered">
-  <button class="btn btn--primary" type="button">Trainingsdaten erfassen</button>
+<!-- Großer Button unten zentriert -->
+<div class="center">
+  <a class="big" href="{{ url_for('sessions.new_session') }}">Trainingsdaten erfassen</a>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const inputNew   = document.getElementById('newPlanName');
-  const inputHide  = document.getElementById('newPlanNameHidden');
-  const createForm = document.getElementById('createForm');
 
-  const select     = document.getElementById('planSelect');
-  const btnEdit    = document.getElementById('btnEdit');
-  const btnDelete  = document.getElementById('btnDelete');
+<!-- Minimaler, seiten-lokaler Stil genau für diese „klassische“ Ansicht -->
+<style>
+  .start-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items:start;
+  }
+  @media (max-width: 900px){ .start-grid{ grid-template-columns:1fr; } }
 
-  // Name in Hidden spiegeln (damit /plans/create ihn bekommt)
-  if (createForm) {
-    createForm.addEventListener('submit', () => {
-      inputHide.value = (inputNew.value || '').trim();
-    });
+  .listbox{
+    width:100%;
+    height:auto;
+    min-height:210px;
+    border:1px solid #bbb;
+    background:#fff;
+    padding:2px;
   }
 
-  const getSelectedId = () => (select && select.value ? select.value : null);
+  .row{ display:flex; }
+  .col{ display:flex; flex-direction:column; }
+  .gap{ gap:.6rem; margin-top:.6rem; }
+
+  button{
+    padding:.45rem .8rem;
+    border:1px solid #bdbdbd;
+    background:#efefef;
+    cursor:pointer;
+  }
+  button:hover{ background:#e3e3e3; }
+
+  .last-box{
+    border:1px solid #000;
+    padding:.5rem .6rem;
+    margin-top:.4rem;
+    background:#fff;
+  }
+  .kv{
+    display:grid;
+    grid-template-columns: 8rem 1fr;
+    row-gap:.25rem;
+    column-gap:.75rem;
+    font-size:.95rem;
+  }
+
+  .center{ text-align:center; margin-top:2rem; }
+  .big{
+    padding:.9rem 2.2rem;
+    border:1px solid #000;
+    background:#efefef;
+    font-size:1rem;
+  }
+</style>
+
+<!-- Verhalten der drei Buttons -->
+<script>
+  const list = document.getElementById('planList');
+  const selId = () => list && list.value ? list.value : null;
 
   // Bearbeiten -> /plans/<id>/edit
-  if (btnEdit) {
-    btnEdit.addEventListener('click', () => {
-      const id = getSelectedId();
-      if (!id) { alert('Bitte einen Plan auswählen.'); return; }
-      window.location.href = `/plans/${id}/edit`;
-    });
-  }
+  document.getElementById('btnEdit').addEventListener('click', () => {
+    const id = selId();
+    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
+    window.location.href = "{{ url_for('plans.edit_plan', plan_id=0) }}".replace('0', id);
+  });
 
   // Löschen (Soft-Delete) -> POST /plans/<id>/delete
-  if (btnDelete) {
-    btnDelete.addEventListener('click', async () => {
-      const id = getSelectedId();
-      if (!id) { alert('Bitte einen Plan auswählen.'); return; }
-      if (!confirm('Diesen Plan wirklich archivieren (Soft-Delete)?')) return;
-      try {
-        const res = await fetch(`/plans/${id}/delete`, { method: 'POST' });
-        if (res.ok) window.location.reload();
-        else alert('Löschen fehlgeschlagen.');
-      } catch {
-        alert('Netzwerkfehler beim Löschen.');
-      }
-    });
-  }
-});
-</script>
+  document.getElementById('btnDelete').addEventListener('click', async () => {
+    const id = selId();
+    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
+    if (!confirm('Diesen Plan wirklich archivieren (Soft-Delete)?')) return;
+    try{
+      const res = await fetch(`/plans/${id}/delete`, { method:'POST' });
+      if(res.ok) location.reload();
+      else alert('Löschen fehlgeschlagen.');
+    }catch{ alert('Netzwerkfehler beim Löschen.'); }
+  });
 
-<style>
-  .logo { font-size: 2rem; font-weight: 800; margin: .5rem 0 1rem; }
-  .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .card { background: #fff; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
-  .add-row { display: flex; gap: .5rem; margin-bottom: .5rem; }
-  .input { flex: 1; padding: .55rem .7rem; border: 1px solid #ddd; border-radius: 8px; }
-  .list { width: 100%; min-height: 200px; border: 1px solid #eee; border-radius: 8px; padding: .5rem; }
-  .actions { display: flex; gap: .5rem; margin-top: .6rem; }
-  .stack { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
-  .btn { background: #f4f4f7; border: 1px solid #e2e3e6; border-radius: 8px; padding: .45rem .8rem; cursor: pointer; }
-  .btn:hover { background: #e9eaf0; }
-  .btn--primary { background: #1f60ff; color: #fff; border: none; padding: .75rem 1.2rem; }
-  .btn--primary:hover { background: #154fe0; }
-  .centered { text-align: center; margin-top: 1.6rem; }
-  .muted { color: #79808a; }
-  @media (max-width: 900px){ .dashboard { grid-template-columns: 1fr; } }
-</style>
+  // Hinzufügen -> Prompt für Namen -> POST /plans/create (next=/)
+  document.getElementById('btnAdd').addEventListener('click', async () => {
+    const name = (prompt('Name des neuen Plans:') || '').trim();
+    if (!name) return;
+    try{
+      const form = new URLSearchParams({ name, next: "{{ url_for('index') }}" });
+      const res = await fetch("{{ url_for('plans.create_plan') }}", {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+        body: form.toString()
+      });
+      if(res.redirected){ window.location.href = res.url; }
+      else { location.reload(); }
+    }catch{ alert('Anlegen fehlgeschlagen.'); }
+  });
+</script>
 {% endblock %}

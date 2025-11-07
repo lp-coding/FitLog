@@ -48,4 +48,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.plans import bp as plans_bp
     app.register_blueprint(plans_bp)
 
+    from .blueprints.sessions import bp as sessions_bp
+    app.register_blueprint(sessions_bp)
+
     return app

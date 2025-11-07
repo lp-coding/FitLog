@@ -4,26 +4,31 @@
   <meta charset="utf-8">
   <title>{% block title %}FitLog{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <!-- Hauptstyles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/utilities.css') }}">
+  {% block extra_css %}{% endblock %}
 </head>
+
 <body>
-<header>
-  <h1>FitLog</h1>
-  <nav aria-label="Hauptnavigation">
-    <!-- Absichtsvoll leer gelassen: Startseite ohne zusätzliche Links -->
-  </nav>
-</header>
+  <header>
+    <h1>FitLog</h1>
+    <nav aria-label="Hauptnavigation"></nav>
+  </header>
 
-{% with msgs = get_flashed_messages(with_categories=true) %}
-  {% if msgs %}
-    {% for cat, msg in msgs %}
-      <div class="flash {{ cat }}">{{ msg }}</div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      {% for cat, msg in msgs %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
 
-<main>
-  {% block content %}{% endblock %}
-</main>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

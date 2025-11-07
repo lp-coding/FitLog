@@ -40,50 +40,6 @@ header { margin-bottom: 1rem; }
 .flash.success { background:#e8fff0; border-color:#8ad1a4; }
 .flash.error   { background:#fff0f0; border-color:#e09da0; }
 
-/* Layout */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  align-items: start;
-}
-@media (max-width: 720px){
-  .grid { grid-template-columns: 1fr; }
-}
-
-/* Card */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  box-shadow: var(--shadow);
-}
-
-/* Forms & listbox */
-form.inline { display: flex; gap: .5rem; margin: .75rem 0; }
-input[type="text"]{
-  flex: 1;
-  padding: .55rem .65rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-}
-input[type="text"]:focus{
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-50);
-}
-
-.listbox{
-  width: 100%;
-  height: 12rem;
-  padding: .4rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-}
-
 /* Buttons */
 button, .btn {
   display: inline-flex;
@@ -102,12 +58,15 @@ button, .btn {
 }
 button:hover, .btn:hover { background: #efefef; }
 
-.btn.primary{
+.btn-primary{
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
 }
-.btn.primary:hover{ background: var(--primary-600); }
+.btn-primary:hover{ background: var(--primary-600); }
+
+.btn-secondary{ background: #f4f4f4; }
+.btn-secondary:hover{ background: #ececec; }
 
 /* Disabled (für <button disabled> UND <a class="btn disabled">) */
 button:disabled,
@@ -121,22 +80,57 @@ button:disabled,
   pointer-events: none;
 }
 
-/* Button-Reihen */
-.btn-row { display: flex; gap: .6rem; margin-top: .6rem; }
-.btn-col { display: flex; flex-direction: column; gap: .6rem; align-items: flex-start; }
+/* Inputs */
+input[type="text"],
+input[type="number"],
+select {
+  padding: .55rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+input:focus, select:focus{
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
 
 /* Tables */
-table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+table { width: 100%; border-collapse: collapse; margin-top: .5rem; background:#fff; border-radius:12px; overflow:hidden; }
 th, td { padding: .5rem; border-bottom: 1px solid var(--border); text-align: left; }
-table.kv td { padding: .35rem .5rem; }
-
 .muted { color: var(--muted); }
 
-/* Full-width action */
-.full { margin-top: 2rem; text-align: center; }
-.full .btn { padding: 1rem 2rem; font-size: 1.05rem; justify-content: center; }
+/* Edit-View spezifisch */
+.plan-header{
+  display:flex; align-items:center; gap:.5rem; margin:.75rem 0 1rem;
+}
+.plan-name-input{ flex:1 1 auto; max-width:28rem; }
+.icon-btn{
+  display:inline-flex; justify-content:center; align-items:center;
+  width:2.25rem; height:2.25rem;
+  border:1px solid var(--border); border-radius:.5rem; text-decoration:none;
+  font-size:1.4rem; line-height:1; background:#fff; color:#111;
+}
+.icon-btn:hover{ background:#f5f5f5; }
+.close-btn{ margin-left:auto; }
 
-/* Focus sichtbarer machen (A11y) */
+.table-edit input[type="number"],
+.table-edit input[type="text"]{ width:100%; }
+
+.drag{ cursor:grab; color:#888; text-align:center; }
+
+.footer-bar{
+  display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1rem; flex-wrap:wrap;
+}
+.add-exercise-form{ display:flex; align-items:center; gap:.5rem; }
+.actions{ display:flex; align-items:center; gap:.5rem; }
+
+/* kleine Helpers */
+.input-num{ width:100%; }
+.input-note{ width:100%; }
+.input-select{ min-width: 220px; }
+
+/* A11y */
 :focus-visible {
   outline: 3px solid var(--primary-50);
   outline-offset: 2px;

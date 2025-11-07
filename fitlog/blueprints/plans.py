@@ -1,117 +1,185 @@
+# fitlog/blueprints/plans.py
 from datetime import datetime
-from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
-from ..db import get_db
+import sqlite3
+from flask import (
+    Blueprint, jsonify, render_template, request,
+    redirect, url_for, flash, abort
+)
+from ..db import get_db  # falls dein db.py woanders liegt ggf. anpassen
 
 bp = Blueprint("plans", __name__, url_prefix="/plans")
 
+# -------------------------------------------------------------------
+# HTML: Pläne-Übersicht (/plans/page)
+# -------------------------------------------------------------------
+@bp.get("/page")
+def list_plans_page():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC"
+    ).fetchall()
+    return render_template("plans/list.html", plans=rows)
+
+# (Optional) JSON: alle aktiven Pläne
 @bp.get("/")
 def list_plans():
-    """JSON: alle Trainingspläne."""
     db = get_db()
     rows = db.execute(
         "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
-@bp.get("/page")
-def list_plans_page():
-    """HTML: Liste der Trainingspläne."""
-    db = get_db()
-    rows = db.execute("SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
-    return render_template("plans/list.html", plans=rows)
-
+# -------------------------------------------------------------------
+# NEU/FEHLTE: Plan anlegen  -> Endpoint-Name: plans.create_plan
+# Wird u.a. von index.html und plans/list.html benutzt
+# -------------------------------------------------------------------
 @bp.post("/create")
 def create_plan():
-    """Legt einen neuen Plan an (aus HTML-Formular)."""
     name = (request.form.get("name") or "").strip()
+    # wohin danach? (kommt als hidden "next"; sonst Startseite)
+    next_url = request.form.get("next") or url_for("index")
+
     if not name:
         flash("Bitte einen Namen angeben.", "error")
-        return redirect(url_for("plans.list_plans_page"))
+        return redirect(next_url)
 
     db = get_db()
     try:
         db.execute("INSERT INTO training_plans (name) VALUES (?)", (name,))
         db.commit()
         flash(f"Plan „{name}“ erstellt.", "success")
-    except Exception:
-        # häufigster Grund: UNIQUE-Constraint (Name schon vorhanden)
-        flash("Konnte Plan nicht erstellen (Name evtl. bereits vorhanden).", "error")
-    return redirect(url_for("plans.list_plans_page"))
+    except sqlite3.IntegrityError:
+        # z. B. UNIQUE(name) bei aktiven Plänen
+        flash("Es existiert bereits ein aktiver Plan mit diesem Namen.", "error")
 
-# Detailseite eines Plans + Formular zum Hinzufügen einer Übung
-@bp.get("/<int:plan_id>")
-def plan_detail(plan_id: int):
+    return redirect(next_url)
+
+# -------------------------------------------------------------------
+# Bearbeiten-Ansicht
+# -------------------------------------------------------------------
+@bp.get("/<int:plan_id>/edit")
+def edit_plan(plan_id: int):
     db = get_db()
-
-    # Plan laden
     plan = db.execute(
-        "SELECT id, name FROM training_plans WHERE id = ?",
+        "SELECT id, name FROM training_plans WHERE id = ? AND deleted_at IS NULL",
         (plan_id,),
     ).fetchone()
     if not plan:
-        return ("Plan nicht gefunden", 404)
+        abort(404, "Plan nicht gefunden oder archiviert.")
 
-    # Bereits verknüpfte Übungen (mit Reihenfolge)
-    exercises_in_plan = db.execute(
+    items = db.execute(
         """
-        SELECT e.id, e.name, e.muscle_group, pe.position
-        FROM plan_exercises AS pe
-        JOIN exercises AS e ON e.id = pe.exercise_id
+        SELECT e.id              AS exercise_id,
+               e.name            AS name,
+               e.muscle_group    AS muscle_group,
+               pe.position       AS position,
+               COALESCE(pe.default_sets, 3)      AS default_sets,
+               COALESCE(pe.default_reps, 10)     AS default_reps,
+               COALESCE(pe.default_weight_kg, 0) AS default_weight_kg,
+               pe.note           AS note
+        FROM plan_exercises pe
+        JOIN exercises e ON e.id = pe.exercise_id
         WHERE pe.plan_id = ?
         ORDER BY COALESCE(pe.position, 9999), e.name
         """,
         (plan_id,),
     ).fetchall()
 
-    # Alle verfügbaren Übungen (für Dropdown); optional: exclude already added
-    all_exercises = db.execute(
-        """
-        SELECT id, name FROM exercises
-        ORDER BY name
-        """
-    ).fetchall()
+    all_exercises = db.execute("SELECT id, name FROM exercises ORDER BY name").fetchall()
 
-    return render_template(
-        "plans/detail.html",
-        plan=plan,
-        exercises_in_plan=exercises_in_plan,
-        all_exercises=all_exercises,
-    )
+    return render_template("plans/edit.html", plan=plan, items=items, all_exercises=all_exercises)
 
+# -------------------------------------------------------------------
+# Änderungen speichern -> danach zur Startseite (/)
+# -------------------------------------------------------------------
+@bp.post("/<int:plan_id>/update")
+def update_plan(plan_id: int):
+    db = get_db()
+    name = (request.form.get("plan_name") or "").strip()
+    if not name:
+        flash("Bitte einen Plan-Namen angeben.", "error")
+        return redirect(url_for("plans.edit_plan", plan_id=plan_id))
+
+    db.execute("UPDATE training_plans SET name = ? WHERE id = ?", (name, plan_id))
+
+    ex_ids    = request.form.getlist("exercise_id[]", type=int)
+    positions = request.form.getlist("position[]", type=int)
+    sets_     = request.form.getlist("default_sets[]", type=int)
+    reps_     = request.form.getlist("default_reps[]", type=int)
+    weights_  = request.form.getlist("default_weight_kg[]", type=float)
+    notes_    = request.form.getlist("note[]")
+
+    n = min(len(ex_ids), len(positions), len(sets_), len(reps_), len(weights_), len(notes_))
+    for i in range(n):
+        db.execute(
+            """
+            UPDATE plan_exercises
+               SET position = ?,
+                   default_sets = ?,
+                   default_reps = ?,
+                   default_weight_kg = ?,
+                   note = ?
+             WHERE plan_id = ? AND exercise_id = ?
+            """,
+            (positions[i], sets_[i], reps_[i], weights_[i], notes_[i], plan_id, ex_ids[i]),
+        )
+
+    db.commit()
+    flash("Plan gespeichert.", "success")
+    return redirect(url_for("index"))
+
+# -------------------------------------------------------------------
+# Übung hinzufügen (bleibt auf Edit)
+# -------------------------------------------------------------------
 @bp.post("/<int:plan_id>/add-exercise")
 def add_exercise(plan_id: int):
     db = get_db()
     exercise_id = request.form.get("exercise_id", type=int)
-    position = request.form.get("position", type=int)
-
     if not exercise_id:
         flash("Bitte eine Übung auswählen.", "error")
-        return redirect(url_for("plans.plan_detail", plan_id=plan_id))
+        return redirect(url_for("plans.edit_plan", plan_id=plan_id))
+
+    next_pos = db.execute(
+        "SELECT COALESCE(MAX(position), 0) + 1 FROM plan_exercises WHERE plan_id = ?",
+        (plan_id,),
+    ).fetchone()[0]
 
     try:
         db.execute(
             "INSERT INTO plan_exercises (plan_id, exercise_id, position) VALUES (?, ?, ?)",
-            (plan_id, exercise_id, position),
+            (plan_id, exercise_id, next_pos),
         )
         db.commit()
         flash("Übung zum Plan hinzugefügt.", "success")
-    except Exception:
-        # Häufigster Grund: UNIQUE-Constraint -> Übung bereits im Plan
+    except sqlite3.IntegrityError:
         flash("Diese Übung ist in diesem Plan bereits enthalten.", "error")
 
-    return redirect(url_for("plans.plan_detail", plan_id=plan_id))
+    return redirect(url_for("plans.edit_plan", plan_id=plan_id))
 
+# -------------------------------------------------------------------
+# Übung aus Plan entfernen (AJAX)
+# -------------------------------------------------------------------
+@bp.post("/<int:plan_id>/remove-exercise")
+def remove_exercise(plan_id: int):
+    db = get_db()
+    exercise_id = request.form.get("exercise_id", type=int)
+    if not exercise_id:
+        return jsonify({"ok": False, "msg": "exercise_id fehlt"}), 400
+    db.execute("DELETE FROM plan_exercises WHERE plan_id = ? AND exercise_id = ?", (plan_id, exercise_id))
+    db.commit()
+    return jsonify({"ok": True})
+
+# -------------------------------------------------------------------
+# Plan archivieren (Soft-Delete, optional genutzt)
+# -------------------------------------------------------------------
 @bp.post("/<int:plan_id>/delete")
 def delete_plan(plan_id: int):
     db = get_db()
-    plan = db.execute(
-        "SELECT id, name, deleted_at FROM training_plans WHERE id = ?",
-        (plan_id,),
-    ).fetchone()
+    plan = db.execute("SELECT id, name, deleted_at FROM training_plans WHERE id = ?", (plan_id,)).fetchone()
     if not plan:
         return jsonify({"ok": False, "msg": "Plan nicht gefunden."}), 404
     if plan["deleted_at"]:
-        return jsonify({"ok": False, "msg": "Plan bereits archiviert."}), 409
+        return jsonify({"ok": False, "msg": "Plan ist bereits archiviert."}), 409
 
     db.execute(
         "UPDATE training_plans SET deleted_at = ? WHERE id = ?",
