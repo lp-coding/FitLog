@@ -54,7 +54,9 @@
 
 <!-- Großer Button unten zentriert -->
 <div class="center">
-  <a class="big" href="{{ url_for('sessions.new_session') }}">Trainingsdaten erfassen</a>
+    <button id="btnRecord" class="big" type="button" aria-disabled="true" disabled>
+        Trainingsdaten erfassen
+    </button>
 </div>
 
 
@@ -115,7 +117,27 @@
 <!-- Verhalten der drei Buttons -->
 <script>
   const list = document.getElementById('planList');
+  const btnRecord = document.getElementById('btnRecord');
+
+  // aktuelles Auswahl-Handling
   const selId = () => list && list.value ? list.value : null;
+
+  function updateRecordButton() {
+    const hasSel = !!selId();
+    btnRecord.disabled = !hasSel;
+    btnRecord.setAttribute('aria-disabled', String(!hasSel));
+  }
+
+  // initial & on change
+  updateRecordButton();
+  list && list.addEventListener('change', updateRecordButton);
+
+  // „Erfassen“-Button klick → /sessions/new?plan_id=<id>
+  btnRecord.addEventListener('click', () => {
+    const id = selId();
+    if (!id) return; // sollte durch disabled nicht passieren
+    window.location.href = "{{ url_for('sessions.new_session') }}" + "?plan_id=" + encodeURIComponent(id);
+  });
 
   // Bearbeiten -> /plans/<id>/edit
   document.getElementById('btnEdit').addEventListener('click', () => {
