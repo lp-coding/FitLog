@@ -30,6 +30,7 @@
 
     <div class="col gap">
       <button id="btnCalories" type="button">Verbrauchte Kalorien</button>
+      <!-- Trainingsfortschritt: direkt zur Auswahlseite (kein JS nötig) -->
       <a class="btn" href="{{ url_for('progress.select_page') }}">Trainingsfortschritt</a>
     </div>
 
@@ -110,46 +111,45 @@
     background:#efefef;
     font-size:1rem;
   }
+  /* Safety: disabled-CTA blockiert keine Klicks darunter (falls Layout overlappt) */
+  .big:disabled{ pointer-events:none; }
 </style>
 
 <script>
-  const list = document.getElementById('planList');
-  const btnRecord = document.getElementById('btnRecord');
-  const btnProgress = document.getElementById('btnProgress');
-  const selId = () => (list && list.value ? list.value : null);
+  const list       = document.getElementById('planList');
+  const btnRecord  = document.getElementById('btnRecord');
+  const btnEdit    = document.getElementById('btnEdit');
+  const btnDelete  = document.getElementById('btnDelete');
+  const btnAdd     = document.getElementById('btnAdd');
+  const selId      = () => (list && list.value ? list.value : null);
 
   function updateRecordButton() {
+    if (!btnRecord) return;
     const hasSel = !!selId();
     btnRecord.disabled = !hasSel;
     btnRecord.setAttribute('aria-disabled', String(!hasSel));
   }
 
+  // Initial + on change
   updateRecordButton();
   list && list.addEventListener('change', updateRecordButton);
 
   // Erfassen starten -> /sessions/new?plan_id=<id>
-  btnRecord.addEventListener('click', () => {
+  btnRecord && btnRecord.addEventListener('click', () => {
     const id = selId();
     if (!id) return;
     window.location.href = "{{ url_for('sessions.new_session') }}" + "?plan_id=" + encodeURIComponent(id);
   });
 
-  // Trainingsfortschritt -> /progress/plan/<id> (Matplotlib)
-  btnProgress.addEventListener('click', () => {
-    const id = selId();
-    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
-    window.location.href = "/progress/plan/" + encodeURIComponent(id);
-  });
-
   // Bearbeiten -> /plans/<id>/edit
-  document.getElementById('btnEdit').addEventListener('click', () => {
+  btnEdit && btnEdit.addEventListener('click', () => {
     const id = selId();
     if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
     window.location.href = "{{ url_for('plans.edit_plan', plan_id=0) }}".replace('0', id);
   });
 
   // Löschen (Soft-Delete) -> POST /plans/<id>/delete
-  document.getElementById('btnDelete').addEventListener('click', async () => {
+  btnDelete && btnDelete.addEventListener('click', async () => {
     const id = selId();
     if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
     if (!confirm('Diesen Plan wirklich archivieren (Soft-Delete)?')) return;
@@ -161,11 +161,11 @@
   });
 
   // Hinzufügen -> Prompt für Namen -> POST /plans/create (next=/)
-  document.getElementById('btnAdd').addEventListener('click', async () => {
+  btnAdd && btnAdd.addEventListener('click', async () => {
     const name = (prompt('Name des neuen Plans:') || '').trim();
     if (!name) return;
     try{
-      const form = new URLSearchParams({ name, next: "{{ url_for('home.index') if 'home' in g else url_for('index') }}" });
+      const form = new URLSearchParams({ name, next: "{{ url_for('index') }}" });
       const res = await fetch("{{ url_for('plans.create_plan') }}", {
         method:'POST',
         headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
