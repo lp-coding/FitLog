@@ -29,8 +29,8 @@
     <h2>Verlauf</h2>
 
     <div class="col gap">
-      <button type="button">Verbrauchte Kalorien</button>
-      <button type="button">Trainingsfortschritt</button>
+      <button id="btnCalories" type="button">Verbrauchte Kalorien</button>
+      <button id="btnProgress" type="button">Trainingsfortschritt</button>
     </div>
 
     <h3>Letztes Training:</h3>
@@ -59,7 +59,6 @@
   </button>
 </div>
 
-<!-- Minimaler, seiten-lokaler Stil genau für diese „klassische“ Ansicht -->
 <style>
   .start-grid{
     display:grid;
@@ -113,11 +112,11 @@
   }
 </style>
 
-<!-- Verhalten -->
 <script>
   const list = document.getElementById('planList');
   const btnRecord = document.getElementById('btnRecord');
-  const selId = () => list && list.value ? list.value : null;
+  const btnProgress = document.getElementById('btnProgress');
+  const selId = () => (list && list.value ? list.value : null);
 
   function updateRecordButton() {
     const hasSel = !!selId();
@@ -133,6 +132,13 @@
     const id = selId();
     if (!id) return;
     window.location.href = "{{ url_for('sessions.new_session') }}" + "?plan_id=" + encodeURIComponent(id);
+  });
+
+  // Trainingsfortschritt -> /progress/plan/<id> (Matplotlib)
+  btnProgress.addEventListener('click', () => {
+    const id = selId();
+    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
+    window.location.href = "/progress/plan/" + encodeURIComponent(id);
   });
 
   // Bearbeiten -> /plans/<id>/edit
@@ -159,7 +165,7 @@
     const name = (prompt('Name des neuen Plans:') || '').trim();
     if (!name) return;
     try{
-      const form = new URLSearchParams({ name, next: "{{ url_for('index') }}" });
+      const form = new URLSearchParams({ name, next: "{{ url_for('home.index') if 'home' in g else url_for('index') }}" });
       const res = await fetch("{{ url_for('plans.create_plan') }}", {
         method:'POST',
         headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
