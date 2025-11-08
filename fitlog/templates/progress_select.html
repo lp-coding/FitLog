@@ -1,10 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Fortschritt – Diagrammauswahl{% endblock %}
+
+{% block content %}
+<h2>Trainingsfortschritt</h2>
+
+<form method="get" action="{{ url_for('progress.select_page') }}" class="form-grid">
+  <label for="type">Diagramm</label>
+  <select id="type" name="type" onchange="this.form.submit()">
+    <option value="" selected>Auswählen</option>
+    <option value="plan">Leistungsstand pro Trainingsplan</option>
+    <option value="exercise">Leistung über Zeit</option>
+  </select>
+
+  <a class="btn-ghost" href="{{ url_for('index') }}" style="justify-self:end">X</a>
+
+  <div style="grid-column: 1 / -1; height: 2rem;"></div>
+
+  <a class="btn" href="{{ url_for('index') }}">Zurück</a>
+</form>
+
+<style>
+  .form-grid {
+    display: grid;
+    grid-template-columns: 10rem 20rem 1fr auto;
+    gap: .75rem 1rem;
+    align-items: center;
+    margin-top: .5rem;
+  }
+  .btn { padding: .4rem .8rem; border: 1px solid #999; background: #eee; text-decoration: none; }
+  .btn-ghost { padding: .25rem .5rem; border: 1px solid #999; background: transparent; text-decoration: none; }
+</style>
+{% endblock %}

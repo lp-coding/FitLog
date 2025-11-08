@@ -1,262 +1,239 @@
 # fitlog/routes/progress.py
+"""
+FitLog – Fortschritt (Matplotlib-Charts)
+
+Seitenfluss:
+- /progress                  -> Diagrammauswahl (nur Dropdown + X + Zurück)
+- /progress/plan             -> Balkendiagramm, Dropdown "Trainingsplan", Export, Zurück, X
+- /progress/exercise         -> Liniendiagramm, Dropdown "Übung", Export, Zurück, X
+
+Bild-Endpunkte (PNG + Download):
+- /progress/plan_chart.png?plan_id=...
+- /progress/exercise_chart.png?exercise_id=...
+"""
+
 from __future__ import annotations
 
-import io
-from typing import List, Tuple, Optional
-from flask import Blueprint, Response, render_template, request, abort
 from datetime import datetime
+from io import BytesIO
+from typing import List, Tuple, Optional
 
-# Matplotlib im Headless-Mode
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, send_file, flash
+)
+
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use("Agg")  # serverseitiges Rendering
 import matplotlib.pyplot as plt
 
-# Hole get_db aus deinem Projekt.
-# Falls dein Pfad anders ist (z.B. fitlog.database.get_db), bitte anpassen:
-try:
-    from fitlog.db import get_db  # bevorzugt
-except Exception:
-    # Fallback, wenn dein Projekt get_db woanders liegen hat:
-    from fitlog.database import get_db  # noqa: F401  # type: ignore
+# Passe den Import ggf. an dein Projekt an:
+from fitlog.db import get_db
 
-progress_bp = Blueprint("progress", __name__, url_prefix="/progress")
+bp = Blueprint("progress", __name__, url_prefix="/progress")
 
 
 # ---------------------------
-# Hilfsfunktionen (SQL, etc.)
+# Daten-Helper
 # ---------------------------
 
-def _fetch_plan_name(db, plan_id: int) -> Optional[str]:
-    row = db.execute(
-        "SELECT name FROM training_plans WHERE id = ? AND (deleted_at IS NULL)",
-        (plan_id,),
-    ).fetchone()
-    return row["name"] if row else None
-
-
-def _fetch_exercise_name(db, exercise_id: int) -> Optional[str]:
-    row = db.execute(
-        "SELECT name FROM exercises WHERE id = ?",
-        (exercise_id,),
-    ).fetchone()
-    return row["name"] if row else None
-
-
-def _fetch_plan_exercises_with_latest_weight(db, plan_id: int) -> List[Tuple[str, float]]:
-    """
-    Liefert Liste von (exercise_name, latest_weight_kg) für alle Übungen eines Plans.
-    - latest_weight_kg: letztes erfasstes Gewicht aus session_records
-      (falls keine Erfassung existiert, 0.0 als Fallback).
-    """
-    # 1) Alle Übungen im Plan (Reihenfolge via position, falls vorhanden)
-    plan_rows = db.execute(
+def fetch_plans() -> List[Tuple[int, str]]:
+    """Alle aktiven (nicht soft-gelöschten) Trainingspläne als (id, name)."""
+    db = get_db()
+    rows = db.execute(
         """
-        SELECT e.id AS exercise_id, e.name AS exercise_name
-        FROM plan_exercises pe
-        JOIN exercises e ON e.id = pe.exercise_id
-        WHERE pe.plan_id = ?
-        ORDER BY COALESCE(pe.position, 999999), e.name
+        SELECT id, name
+        FROM training_plans
+        WHERE deleted_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        """
+    ).fetchall()
+    return [(r["id"], r["name"]) for r in rows]
+
+
+def fetch_exercises() -> List[Tuple[int, str]]:
+    """Alle Übungen als (id, name) alphabetisch."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name FROM exercises ORDER BY name COLLATE NOCASE ASC"
+    ).fetchall()
+    return [(r["id"], r["name"]) for r in rows]
+
+
+def fetch_plan_current_weights(plan_id: int) -> List[Tuple[str, float]]:
+    """
+    Für einen Plan: (Übungsname, letztes Gewicht) anhand des jüngsten Eintrags je Übung.
+    Übungen ohne Einträge werden ausgeblendet, damit das Chart übersichtlich bleibt.
+    """
+    db = get_db()
+    rows = db.execute(
+        """
+        WITH latest_entries AS (
+            SELECT
+                se.exercise_id,
+                se.weight_kg,
+                s.ended_at,
+                ROW_NUMBER() OVER (PARTITION BY se.exercise_id ORDER BY s.ended_at DESC, s.id DESC) AS rn
+            FROM session_entries se
+            JOIN sessions s        ON s.id = se.session_id
+            JOIN plan_exercises pe ON pe.exercise_id = se.exercise_id AND pe.plan_id = s.plan_id
+            WHERE s.plan_id = ?
+        )
+        SELECT e.name AS exercise_name, le.weight_kg
+        FROM latest_entries le
+        JOIN exercises e ON e.id = le.exercise_id
+        WHERE le.rn = 1 AND le.weight_kg IS NOT NULL
+        ORDER BY e.name COLLATE NOCASE ASC
         """,
         (plan_id,),
     ).fetchall()
-
-    if not plan_rows:
-        return []
-
-    # 2) Für jede Übung: letztes Gewicht aus session_records für Sessions dieses Plans
-    result: List[Tuple[str, float]] = []
-    for r in plan_rows:
-        ex_id = r["exercise_id"]
-        ex_name = r["exercise_name"]
-
-        rec = db.execute(
-            """
-            SELECT sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE ts.plan_id = ?
-              AND sr.exercise_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at) DESC, sr.id DESC
-            LIMIT 1
-            """,
-            (plan_id, ex_id),
-        ).fetchone()
-
-        latest = float(rec["weight_kg"]) if rec and rec["weight_kg"] is not None else 0.0
-        result.append((ex_name, latest))
-
-    return result
+    return [(r["exercise_name"], float(r["weight_kg"])) for r in rows]
 
 
-def _fetch_exercise_history(db, exercise_id: int, plan_id: Optional[int]) -> List[Tuple[str, float]]:
-    """
-    Liefert Verlauf (ISO-Datum, Gewicht) für eine Übung. Optional nach Plan filterbar.
-    Sortiert nach Datum/Zeit aufsteigend.
-    """
-    if plan_id:
-        rows = db.execute(
-            """
-            SELECT
-                DATE(COALESCE(sr.created_at, ts.ended_at, ts.started_at)) AS day,
-                sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE sr.exercise_id = ?
-              AND ts.plan_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at, ts.started_at), sr.id
-            """,
-            (exercise_id, plan_id),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            """
-            SELECT
-                DATE(COALESCE(sr.created_at, ts.ended_at, ts.started_at)) AS day,
-                sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE sr.exercise_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at, ts.started_at), sr.id
-            """,
-            (exercise_id,),
-        ).fetchall()
-
-    history: List[Tuple[str, float]] = []
-    for row in rows:
-        if row["weight_kg"] is None:
-            continue
-        history.append((row["day"], float(row["weight_kg"])))
-    return history
+def fetch_exercise_timeseries(exercise_id: int) -> List[Tuple[datetime, float]]:
+    """Zeitreihe (Zeitstempel, Gewicht) über alle Sessions zu einer Übung."""
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT s.ended_at AS ts, se.weight_kg
+        FROM session_entries se
+        JOIN sessions s ON s.id = se.session_id
+        WHERE se.exercise_id = ? AND se.weight_kg IS NOT NULL
+        ORDER BY s.ended_at ASC, s.id ASC
+        """,
+        (exercise_id,),
+    ).fetchall()
+    points: List[Tuple[datetime, float]] = []
+    for r in rows:
+        ts = r["ts"]
+        if isinstance(ts, str):
+            try:
+                ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        points.append((ts, float(r["weight_kg"])))
+    return points
 
 
 # ---------------------------
-# HTML-Seiten
+# Seiten
 # ---------------------------
 
-@progress_bp.get("/plan/<int:plan_id>")
-def plan_view(plan_id: int):
-    """HTML-Seite: zeigt Balkendiagramm (PNG) für Plan."""
-    db = get_db()
-    plan_name = _fetch_plan_name(db, plan_id)
-    if not plan_name:
-        abort(404, "Plan not found")
+@bp.get("/")
+def select_page():
+    """
+    Diagrammauswahl (Mockup 1).
+    Wenn ?type=exercise|plan übergeben wird, leiten wir direkt auf die passende Seite.
+    """
+    diag_type = request.args.get("type")
+    if diag_type == "plan":
+        return redirect(url_for("progress.plan_page"))
+    if diag_type == "exercise":
+        return redirect(url_for("progress.exercise_page"))
+    return render_template("progress_select.html")
 
-    # PNG wird in separatem Endpoint gerendert
-    return render_template("progress_plan.html", plan_id=plan_id, plan_name=plan_name)
+
+@bp.get("/plan")
+def plan_page():
+    """
+    Seite für Balkendiagramm (Mockup 2).
+    - Dropdown 'Trainingsplan'
+    - Export-Button (lädt PNG)
+    - Bild <img> nur, wenn plan_id gesetzt ist
+    """
+    plans = fetch_plans()
+    selected_plan = request.args.get("plan_id", type=int)
+    return render_template(
+        "progress_plan.html",
+        plans=plans,
+        selected_plan=selected_plan,
+    )
 
 
-@progress_bp.get("/exercise/<int:exercise_id>")
-def exercise_view(exercise_id: int):
-    """HTML-Seite: zeigt Liniendiagramm (PNG) für eine Übung. Optional filter=plan_id."""
-    plan_id = request.args.get("plan_id", type=int)
-    db = get_db()
-    exercise_name = _fetch_exercise_name(db, exercise_id)
-    if not exercise_name:
-        abort(404, "Exercise not found")
-
-    plan_name = None
-    if plan_id:
-        plan_name = _fetch_plan_name(db, plan_id)
-
+@bp.get("/exercise")
+def exercise_page():
+    """
+    Seite für Liniendiagramm (Mockup 3).
+    - Dropdown 'Übung'
+    - Export-Button (lädt PNG)
+    - Bild <img> nur, wenn exercise_id gesetzt ist
+    """
+    exercises = fetch_exercises()
+    selected_exercise = request.args.get("exercise_id", type=int)
     return render_template(
         "progress_exercise.html",
-        exercise_id=exercise_id,
-        exercise_name=exercise_name,
-        plan_id=plan_id,
-        plan_name=plan_name,
+        exercises=exercises,
+        selected_exercise=selected_exercise,
     )
 
 
 # ---------------------------
-# PNG-Render-Endpunkte
+# PNG-Endpunkte (Export)
 # ---------------------------
 
-@progress_bp.get("/plan/<int:plan_id>/png")
-def plan_png(plan_id: int):
-    """
-    Balkendiagramm: aktuelles (zuletzt erfasstes) Gewicht je Übung im Plan.
-    Optional: ?download=1 setzt Attachment-Header.
-    """
-    db = get_db()
-    plan_name = _fetch_plan_name(db, plan_id)
-    if not plan_name:
-        abort(404, "Plan not found")
-
-    data = _fetch_plan_exercises_with_latest_weight(db, plan_id)
-    labels = [name for name, _ in data]
-    values = [val for _, val in data]
-
-    fig, ax = plt.subplots(figsize=(7.5, 3.8), dpi=140)
-    ax.bar(labels, values)
-    ax.set_title(f"Current weights per exercise – {plan_name}")
-    ax.set_ylabel("Weight (kg)")
-    ax.set_xlabel("Exercise")
-    ax.grid(axis="y", linestyle=":", alpha=0.4)
-    plt.setp(ax.get_xticklabels(), rotation=18, ha="right")
-    plt.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
-    plt.close(fig)
-    buf.seek(0)
-
-    download = request.args.get("download", type=int) == 1
-    headers = {}
-    if download:
-        safe_name = plan_name.replace('"', "'")
-        headers["Content-Disposition"] = f'attachment; filename="progress_plan_{safe_name}.png"'
-    return Response(buf.getvalue(), mimetype="image/png", headers=headers)
-
-
-@progress_bp.get("/exercise/<int:exercise_id>/png")
-def exercise_png(exercise_id: int):
-    """
-    Liniendiagramm: Gewichtsverlauf einer Übung.
-    Optionaler Filter: ?plan_id=123
-    Optional: ?download=1
-    """
+@bp.get("/plan_chart.png")
+def plan_chart_png():
+    """PNG-Balkendiagramm für aktuellen Leistungsstand im Plan."""
     plan_id = request.args.get("plan_id", type=int)
-    db = get_db()
-    exercise_name = _fetch_exercise_name(db, exercise_id)
-    if not exercise_name:
-        abort(404, "Exercise not found")
+    if not plan_id:
+        flash("Kein Trainingsplan ausgewählt.")
+        return redirect(url_for("progress.plan_page"))
 
-    hist = _fetch_exercise_history(db, exercise_id, plan_id)
-    dates = [d for d, _ in hist]
-    weights = [w for _, w in hist]
+    data = fetch_plan_current_weights(plan_id)
 
-    fig, ax = plt.subplots(figsize=(7.5, 3.2), dpi=140)
-
-    if weights:
-        ax.plot(dates, weights, marker="o", linewidth=2)
+    fig, ax = plt.subplots(figsize=(7.5, 4.5), layout="constrained")
+    if data:
+        names = [n for n, _ in data]
+        weights = [w for _, w in data]
+        ax.bar(names, weights)
+        ax.set_ylabel("Gewicht [kg]")
+        ax.set_title("Aktueller Leistungsstand (letzter Eintrag je Übung)")
+        ax.set_xticklabels(names, rotation=20, ha="right")
+        ax.grid(axis="y", alpha=0.3)
     else:
-        ax.text(
-            0.5, 0.5,
-            "No data yet",
-            ha="center", va="center", transform=ax.transAxes
-        )
+        ax.text(0.5, 0.5, "Keine Daten vorhanden.", ha="center", va="center", fontsize=12)
+        ax.axis("off")
 
-    title = f"Weight over time – {exercise_name}"
-    if plan_id:
-        plan_name = _fetch_plan_name(db, plan_id)
-        if plan_name:
-            title += f" (Plan: {plan_name})"
-    ax.set_title(title)
-    ax.set_ylabel("Weight (kg)")
-    ax.set_xlabel("Date")
-    ax.grid(True, linestyle=":", alpha=0.4)
-    plt.xticks(rotation=20, ha="right")
-    plt.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=150)
     plt.close(fig)
-    buf.seek(0)
+    out.seek(0)
 
-    download = request.args.get("download", type=int) == 1
-    headers = {}
-    if download:
-        base = exercise_name.replace('"', "'")
-        suffix = f"_plan{plan_id}" if plan_id else ""
-        headers["Content-Disposition"] = f'attachment; filename="progress_exercise_{base}{suffix}.png"'
-    return Response(buf.getvalue(), mimetype="image/png", headers=headers)
+    filename = f"plan_progress_{plan_id}.png"
+    as_attachment = bool(request.args.get("download"))
+    return send_file(out, mimetype="image/png", download_name=filename, as_attachment=as_attachment)
+
+
+@bp.get("/exercise_chart.png")
+def exercise_chart_png():
+    """PNG-Liniendiagramm für Übungsentwicklung über Zeit."""
+    exercise_id = request.args.get("exercise_id", type=int)
+    if not exercise_id:
+        flash("Keine Übung ausgewählt.")
+        return redirect(url_for("progress.exercise_page"))
+
+    # Name für Titel
+    exercise_map = dict(fetch_exercises())
+    exercise_name = exercise_map.get(exercise_id, f"Übung {exercise_id}")
+
+    points = fetch_exercise_timeseries(exercise_id)
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.5), layout="constrained")
+    if points:
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        ax.plot(xs, ys, marker="o")
+        ax.set_ylabel("Gewicht [kg]")
+        ax.set_title(f"Leistung über Zeit – {exercise_name}")
+        ax.grid(alpha=0.3)
+    else:
+        ax.text(0.5, 0.5, "Keine Daten vorhanden.", ha="center", va="center", fontsize=12)
+        ax.axis("off")
+
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=150)
+    plt.close(fig)
+    out.seek(0)
+
+    filename = f"exercise_progress_{exercise_id}.png"
+    as_attachment = bool(request.args.get("download"))
+    return send_file(out, mimetype="image/png", download_name=filename, as_attachment=as_attachment)

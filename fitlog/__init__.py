@@ -53,7 +53,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.sessions import bp as sessions_bp
     app.register_blueprint(sessions_bp)
 
-    from fitlog.routes.progress import progress_bp
+    from fitlog.routes.progress import bp as progress_bp
     app.register_blueprint(progress_bp)
 
     return app
