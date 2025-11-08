@@ -8,31 +8,26 @@ from flask import (
     Blueprint, current_app, render_template, request,
     redirect, url_for, abort, flash
 )
+
+# WICHTIG: Einheitlich dieselbe DB-Funktion wie der Rest der App nutzen
+from fitlog.db import get_db
+
 bp = Blueprint("sessions", __name__, url_prefix="/sessions")
 
 
 # ------------------------------
-# DB Infrastruktur
+# Zeit-Helper
 # ------------------------------
-def get_db() -> sqlite3.Connection:
-    """Open a SQLite connection with row_factory=Row and FK enabled."""
-    db_path = current_app.config.get("DATABASE")
-    if not db_path:
-        from pathlib import Path
-        db_path = str(Path(current_app.instance_path) / "fitlog.db")
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
-
-
-def _utcnow_iso() -> str:
-    """UTC timestamp ISO (seconds)."""
+def _utcnow_sqlite() -> str:
+    """
+    UTC Timestamp im SQLite-kompatiblen Format 'YYYY-MM-DD HH:MM:SS'.
+    (Kein 'T' → dadurch ist datetime(...) in SQL robust.)
+    """
     return (
         datetime.now(timezone.utc)
         .astimezone(timezone.utc)
         .replace(tzinfo=None)
-        .isoformat(timespec="seconds")
+        .strftime("%Y-%m-%d %H:%M:%S")
     )
 
 
@@ -71,12 +66,12 @@ def _load_session(db: sqlite3.Connection, session_id: int) -> sqlite3.Row:
 
 def _load_record_items(db: sqlite3.Connection, session_id: int) -> List[sqlite3.Row]:
     """
-    Prefilled inputs for record form (eine Zeile je Übung):
+    Prefilled inputs für das Erfassungsformular (eine Zeile je Übung):
       - Basis: alle Übungen aus dem Plan
       - Prefill-Priorität: session_entries > plan_exercises-Defaults
       - Notiz-Fallback: session_entries.note > plan_exercises.note > ''
       - Sätze: COALESCE(se.sets, pe.default_sets, 3)
-        (Spalten 'sets' / 'default_sets' sind optional und werden nur gelesen, wenn vorhanden)
+        (Spalten 'sets' / 'default_sets' sind optional)
     """
     has_se_sets = _table_has_column(db, "session_entries", "sets")
     has_pe_sets = _table_has_column(db, "plan_exercises", "default_sets")
@@ -88,13 +83,10 @@ def _load_record_items(db: sqlite3.Connection, session_id: int) -> List[sqlite3.
         SELECT
             e.id   AS exercise_id,
             e.name AS name,
-
-            /* Sätze mit robustem Fallback auf 3 */
-            COALESCE({se_sets_expr}, {pe_sets_expr}, 3) AS sets,
-
-            COALESCE(se.reps,      pe.default_reps,       10) AS reps,
-            COALESCE(se.weight_kg, pe.default_weight_kg,   0) AS weight_kg,
-            COALESCE(se.note,      pe.note,               '') AS note
+            COALESCE({se_sets_expr}, {pe_sets_expr}, 3)  AS sets,
+            COALESCE(se.reps,      pe.default_reps,      10) AS reps,
+            COALESCE(se.weight_kg, pe.default_weight_kg,  0) AS weight_kg,
+            COALESCE(se.note,      pe.note,              '') AS note
         FROM sessions s
         JOIN plan_exercises pe ON pe.plan_id   = s.plan_id
         JOIN exercises      e  ON e.id         = pe.exercise_id
@@ -115,10 +107,10 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
       B) flat: exercise_id + sets_<id>, reps_<id>, weight_<id>, note_<id>
 
     Besonderheiten:
-      - Sätze 0..99 (0 = Übung ausgelassen -> kein Speichern)
+      - Sätze 0..99 (0 = Übung ausgelassen -> kein Datensatz)
       - Spalte 'sets' ist optional: wird nur beschrieben, wenn vorhanden
     """
-    # Parser (falls vorhanden) darf liefern; ansonsten fallen wir auf eigenes Parsing zurück
+    # Parser (falls vorhanden) darf liefern; ansonsten Fallback
     try:
         from fitlog.services.record_parser import parse_exercises_form
         parsed = parse_exercises_form(form)  # Dict[int, Dict[str, Any]]
@@ -129,9 +121,8 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
 
     # Alle exercise_ids aus dem Formular
     exercise_ids = request.form.getlist("exercise_id")
-    # Fallback: falls Template keine hidden exercise_id setzt, versuche IDs aus Keys zu parsen
     if not exercise_ids:
-        # Suche nach ex[<id>][...] oder <field>_<id>
+        # Versuche IDs aus Keys zu parsen: ex[<id>][...] oder <field>_<id>
         for key in form.keys():
             if key.startswith("ex["):
                 try:
@@ -144,7 +135,6 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
                 suffix = key.rsplit("_", 1)[-1]
                 if suffix.isdigit():
                     exercise_ids.append(suffix)
-        # deduplizieren
         exercise_ids = sorted(set(exercise_ids), key=lambda x: int(x) if x.isdigit() else 0)
 
     for raw_id in exercise_ids:
@@ -207,9 +197,8 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
         if "note" in payload:
             note = str(payload.get("note", note) or "").strip()
 
-        # Wenn Sätze explizit 0 -> Übung ausgelassen -> keinen Datensatz speichern
+        # Sätze==0 → Eintrag löschen (ausgelassen)
         if sets_val is not None and sets_val == 0:
-            # evtl. vorhandenen Eintrag löschen, damit „auslassen“ eindeutig ist
             db.execute(
                 "DELETE FROM session_entries WHERE session_id = ? AND exercise_id = ?",
                 (session_id, ex_id),
@@ -217,12 +206,7 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
             continue
 
         # Dynamisches INSERT/UPSERT (mit optionaler Spalte 'sets')
-        columns = ["session_id", "exercise_id", "weight_kg", "reps", "note", "created_at"]
-        values = [session_id, ex_id, weight, reps, note, _utcnow_iso()]
         if has_se_sets:
-            # wir fügen 'sets' vor 'note' ein (Reihenfolge egal, aber semantisch schöner)
-            insert_cols = ["session_id", "exercise_id", "weight_kg", "reps", "sets", "note", "created_at"]
-            insert_vals = [session_id, ex_id, weight, reps, (sets_val if sets_val is not None else 3), note, _utcnow_iso()]
             sql = """
                 INSERT INTO session_entries (session_id, exercise_id, weight_kg, reps, sets, note, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -233,9 +217,10 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
                   note      = excluded.note,
                   created_at= excluded.created_at
             """
-            db.execute(sql, insert_vals)
+            db.execute(sql, [session_id, ex_id, weight, reps,
+                             (sets_val if sets_val is not None else 3),
+                             note, _utcnow_sqlite()])
         else:
-            # kein 'sets' in Tabelle -> altes, kompatibles Verhalten
             sql = """
                 INSERT INTO session_entries (session_id, exercise_id, weight_kg, reps, note, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -245,7 +230,7 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
                   note      = excluded.note,
                   created_at= excluded.created_at
             """
-            db.execute(sql, values)
+            db.execute(sql, [session_id, ex_id, weight, reps, note, _utcnow_sqlite()])
 
 
 # ------------------------------
@@ -260,7 +245,7 @@ def new_session():
         return redirect(url_for("index"))
 
     db = get_db()
-    started_at = _utcnow_iso()
+    started_at = _utcnow_sqlite()
     cur = db.execute(
         "INSERT INTO sessions (plan_id, started_at) VALUES (?, ?)",
         (plan_id, started_at),
@@ -298,17 +283,13 @@ def record_session(session_id: int):
 
 @bp.post("/<int:session_id>/finish")
 def finish_session(session_id: int):
-    """Training speichern & beenden."""
+    """Training speichern & beenden (→ Startseite zeigt korrekt „Letztes Training“)."""
     db = get_db()
     sess = _load_session(db, session_id)
     _upsert_entries(db, session_id, request.form)
 
     # Optional: Dauer in Minuten
-    raw_minutes = request.form.get("duration_minutes_override")
-    if not raw_minutes:
-        # Alias unterstützen (z. B. neues Template-Feld 'duration_minutes')
-        raw_minutes = request.form.get("duration_minutes")
-
+    raw_minutes = request.form.get("duration_minutes_override") or request.form.get("duration_minutes")
     if raw_minutes:
         try:
             mins = max(0.0, float(str(raw_minutes).replace(",", ".").strip()))
@@ -322,13 +303,13 @@ def finish_session(session_id: int):
             start_dt = datetime.fromisoformat(sess["started_at"])
         except Exception:
             start_dt = datetime.utcnow()
-        ended_at_iso = (start_dt + timedelta(minutes=mins)).isoformat(timespec="seconds")
+        ended_at_iso = (start_dt + timedelta(minutes=mins)).strftime("%Y-%m-%d %H:%M:%S")
         db.execute("UPDATE sessions SET ended_at = ? WHERE id = ?", (ended_at_iso, session_id))
     else:
         # klassischer „Training beenden“-Klick -> Ende jetzt, falls nicht schon gesetzt
         db.execute(
             "UPDATE sessions SET ended_at = COALESCE(ended_at, ?) WHERE id = ?",
-            (_utcnow_iso(), session_id),
+            (_utcnow_sqlite(), session_id),
         )
 
     db.commit()
@@ -339,7 +320,7 @@ def finish_session(session_id: int):
 
 @bp.post("/<int:session_id>/abort")
 def abort_session(session_id: int):
-    """Training abbrechen – löscht Session und Einträge."""
+    """Training abbrechen – löscht Session und Einträge (keine ‚Letztes Training‘-Aktualisierung)."""
     db = get_db()
     _ = _load_session(db, session_id)
     db.execute("DELETE FROM session_entries WHERE session_id = ?", (session_id,))
