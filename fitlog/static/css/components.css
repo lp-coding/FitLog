@@ -48,7 +48,6 @@ th, td {
 }
 .muted { color: var(--muted); }
 
-
 /* ===========================
    Flash Messages
    =========================== */
@@ -67,11 +66,11 @@ th, td {
   border: 1px solid transparent;
 }
 
-/* Grünes Design wie "Plan gespeichert" */
+/* Grün wie "Plan gespeichert" */
 .flash.success {
-  background-color: #e7f6ec; /* heller Grünton */
-  border-color: #84cc16;     /* Limegrün aus Tailwind */
-  color: #14532d;            /* dunkles Grün für Text */
+  background-color: #e7f6ec;
+  border-color: #84cc16;
+  color: #14532d;
 }
 
 .flash.error {

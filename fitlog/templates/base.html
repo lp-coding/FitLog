@@ -20,8 +20,6 @@
   </header>
 
   <main>
-
-    <!-- Flash-Nachrichten -->
     {% with msgs = get_flashed_messages(with_categories=true) %}
       {% if msgs %}
         <div class="flash-container">
@@ -34,6 +32,5 @@
 
     {% block content %}{% endblock %}
   </main>
-
 </body>
 </html>
