@@ -1,10 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Übungsverlauf – {{ exercise_name }}{% endblock %}
+
+{% block content %}
+  <h2>Übungsverlauf – {{ exercise_name }}{% if plan_name %} <small class="muted">(Plan: {{ plan_name }})</small>{% endif %}</h2>
+
+  <div style="margin: .5rem 0 1rem;">
+    <a class="btn"
+       href="{{ url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id) }}">
+       Bild anzeigen
+    </a>
+    <a class="btn"
+       href="{{ (url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id)) + '&download=1' }}">
+       Als PNG speichern
+    </a>
+  </div>
+
+  <img
+    src="{{ url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id) }}"
+    alt="Exercise Progress Chart"
+    style="max-width: 900px; width: 100%; border: 1px solid #eee; border-radius: 8px;"
+  >
+{% endblock %}

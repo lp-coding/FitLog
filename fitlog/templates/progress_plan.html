@@ -1,10 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Trainingsfortschritt – {{ plan_name }}{% endblock %}
+
+{% block content %}
+  <h2>Trainingsfortschritt – {{ plan_name }}</h2>
+
+  <div style="margin: .5rem 0 1rem;">
+    <a class="btn" href="{{ url_for('progress.plan_png', plan_id=plan_id) }}">Bild anzeigen</a>
+    <a class="btn" href="{{ url_for('progress.plan_png', plan_id=plan_id) }}?download=1">Als PNG speichern</a>
+  </div>
+
+  <img
+    src="{{ url_for('progress.plan_png', plan_id=plan_id) }}"
+    alt="Plan Progress Chart"
+    style="max-width: 900px; width: 100%; border: 1px solid #eee; border-radius: 8px;"
+  >
+{% endblock %}

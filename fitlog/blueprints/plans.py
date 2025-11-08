@@ -27,6 +27,7 @@ def list_plans():
     rows = db.execute(
         "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY id DESC"
     ).fetchall()
+
     return jsonify([dict(r) for r in rows])
 
 # -------------------------------------------------------------------

@@ -43,6 +43,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             """
         ).fetchone()
 
+        from fitlog.services.last_session import get_last_session
+        last_session = get_last_session(db)
         return render_template("index.html", plans=plans, last_session=last_session)
 
     from .blueprints.plans import bp as plans_bp
@@ -50,5 +52,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     from .blueprints.sessions import bp as sessions_bp
     app.register_blueprint(sessions_bp)
+
+    from fitlog.routes.progress import progress_bp
+    app.register_blueprint(progress_bp)
 
     return app

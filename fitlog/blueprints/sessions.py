@@ -8,7 +8,6 @@ from flask import (
     Blueprint, current_app, render_template, request,
     redirect, url_for, abort, flash
 )
-
 bp = Blueprint("sessions", __name__, url_prefix="/sessions")
 
 
