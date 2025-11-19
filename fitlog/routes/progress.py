@@ -5,7 +5,7 @@ import io
 from typing import List, Tuple, Optional
 from datetime import datetime
 
-from flask import Blueprint, Response, render_template, request, abort
+from flask import Blueprint, Response, render_template, request, abort, redirect, url_for
 
 # Matplotlib im Headless-Mode
 import matplotlib
@@ -147,37 +147,103 @@ def _fetch_exercise_history(
 # HTML-Seiten
 # ---------------------------
 
+@progress_bp.get("/")
+def overview() -> Response:
+    """
+    Übersicht „Trainingsfortschritt“.
+
+    Von hier aus:
+      - Diagrammtyp wählen (Planübersicht oder Übungsverlauf)
+      - passenden Plan bzw. Übung auswählen
+      - Diagramm als PNG anzeigen lassen (in der Seite eingebettet)
+    """
+    db = get_db()
+
+    plans = db.execute(
+        "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY name"
+    ).fetchall()
+    exercises = db.execute(
+        "SELECT id, name FROM exercises ORDER BY name"
+    ).fetchall()
+
+    diagram_type = request.args.get("diagram_type", "plan")
+    if diagram_type not in ("plan", "exercise"):
+        diagram_type = "plan"
+
+    selected_plan_id = request.args.get("plan_id", type=int)
+    selected_exercise_id = request.args.get("exercise_id", type=int)
+
+    image_url: Optional[str] = None
+    title_suffix = ""
+    selected_plan_name: Optional[str] = None
+    selected_exercise_name: Optional[str] = None
+
+    if diagram_type == "plan" and selected_plan_id:
+        selected_plan_name = _fetch_plan_name(db, selected_plan_id)
+        if selected_plan_name:
+            image_url = url_for("progress.plan_png", plan_id=selected_plan_id)
+            title_suffix = f" – {selected_plan_name}"
+        else:
+            selected_plan_id = None
+
+    elif diagram_type == "exercise" and selected_exercise_id:
+        selected_exercise_name = _fetch_exercise_name(db, selected_exercise_id)
+        if selected_exercise_name:
+            image_url = url_for("progress.exercise_png", exercise_id=selected_exercise_id)
+            title_suffix = f" – {selected_exercise_name}"
+        else:
+            selected_exercise_id = None
+
+    return render_template(
+        "progress_plan.html",  # gemeinsames Template für beide Diagrammtypen
+        diagram_type=diagram_type,
+        plans=plans,
+        exercises=exercises,
+        selected_plan_id=selected_plan_id,
+        selected_exercise_id=selected_exercise_id,
+        selected_plan_name=selected_plan_name,
+        selected_exercise_name=selected_exercise_name,
+        image_url=image_url,
+        title_suffix=title_suffix,
+    )
+
+
 @progress_bp.get("/plan/<int:plan_id>")
-def plan_view(plan_id: int):
-    """HTML-Seite: zeigt Balkendiagramm (PNG) für Plan."""
+def plan_view(plan_id: int) -> Response:
+    """
+    Kompatibilitäts-Endpoint: vorbefüllte Plan-Ansicht.
+    Leitet intern auf die Übersichtsseite mit gesetztem diagram_type=plan weiter.
+    """
     db = get_db()
     plan_name = _fetch_plan_name(db, plan_id)
     if not plan_name:
         abort(404, "Plan not found")
 
-    # PNG wird in separatem Endpoint gerendert
-    return render_template("progress_plan.html", plan_id=plan_id, plan_name=plan_name)
+    return redirect(
+        url_for("progress.overview", diagram_type="plan", plan_id=plan_id)
+    )
 
 
 @progress_bp.get("/exercise/<int:exercise_id>")
-def exercise_view(exercise_id: int):
-    """HTML-Seite: zeigt Liniendiagramm (PNG) für eine Übung. Optional filter=plan_id."""
-    plan_id = request.args.get("plan_id", type=int)
+def exercise_view(exercise_id: int) -> Response:
+    """
+    Kompatibilitäts-Endpoint: vorbefüllte Übungsansicht.
+    Leitet intern auf die Übersichtsseite mit gesetztem diagram_type=exercise weiter.
+    Optionaler plan_id-Filter bleibt als Query-Parameter erhalten.
+    """
     db = get_db()
     exercise_name = _fetch_exercise_name(db, exercise_id)
     if not exercise_name:
         abort(404, "Exercise not found")
 
-    plan_name = None
-    if plan_id:
-        plan_name = _fetch_plan_name(db, plan_id)
-
-    return render_template(
-        "progress_exercise.html",
-        exercise_id=exercise_id,
-        exercise_name=exercise_name,
-        plan_id=plan_id,
-        plan_name=plan_name,
+    plan_id = request.args.get("plan_id", type=int)
+    return redirect(
+        url_for(
+            "progress.overview",
+            diagram_type="exercise",
+            exercise_id=exercise_id,
+            plan_id=plan_id,
+        )
     )
 
 
@@ -245,6 +311,7 @@ def exercise_png(exercise_id: int):
     fig, ax = plt.subplots(figsize=(7.5, 3.2), dpi=140)
 
     if weights:
+        # Linie mit Markern, x-Achse = Datum, y-Achse = Gewicht
         ax.plot(dates, weights, marker="o", linewidth=2)
     else:
         ax.text(

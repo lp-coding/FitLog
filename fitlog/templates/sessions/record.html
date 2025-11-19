@@ -15,18 +15,11 @@
       <input class="input w-full" type="text" value="{{ sess.plan_name }}" readonly>
     </div>
     <div>
-      <label class="block text-sm font-medium mb-1">Gestartet am</label>
-      <input class="input w-full" type="text" value="{{ started_display }}" readonly>
-    </div>
-    <div>
       <label class="block text-sm font-medium mb-1">
-        Trainingsdauer (Minuten) <span class="text-gray-500">(optional)</span>
+        Trainingsdauer (Minuten)
       </label>
       <input class="input w-full" type="number" name="duration_minutes"
-             min="1" max="600" placeholder="z. B. 45">
-      <p class="text-xs text-gray-500 mt-1">
-        Leer lassen, wenn du live erfasst. Bei Eingabe gilt: Start = Jetzt − Dauer, Ende = Jetzt.
-      </p>
+             min="1" max="600" placeholder="45">
     </div>
   </div>
 

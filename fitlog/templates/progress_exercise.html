@@ -1,23 +1,131 @@
 {% extends "base.html" %}
 {% block title %}Übungsverlauf – {{ exercise_name }}{% endblock %}
 
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/progress.css') }}">
+{% endblock %}
+
 {% block content %}
-  <h2>Übungsverlauf – {{ exercise_name }}{% if plan_name %} <small class="muted">(Plan: {{ plan_name }})</small>{% endif %}</h2>
+<div class="progress-page card">
 
-  <div style="margin: .5rem 0 1rem;">
-    <a class="btn"
-       href="{{ url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id) }}">
-       Bild anzeigen
-    </a>
-    <a class="btn"
-       href="{{ (url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id)) + '&download=1' }}">
-       Als PNG speichern
-    </a>
-  </div>
+  <!-- Kopfbereich: App-Titel, Diagramm-Auswahl, Schließen -->
+  <header class="progress-header">
+    <div class="progress-header__left">
+      <div class="progress-app-title">
+        FitLog – Der Trainingsplantracker
+      </div>
 
-  <img
-    src="{{ url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) if plan_id else url_for('progress.exercise_png', exercise_id=exercise_id) }}"
-    alt="Exercise Progress Chart"
-    style="max-width: 900px; width: 100%; border: 1px solid #eee; border-radius: 8px;"
-  >
+      <div class="progress-row">
+        <label for="diagramType">Diagramm</label>
+        <select id="diagramType" class="progress-select">
+          <option value="plan">Leistungsstand pro Trainingsplan</option>
+          <option value="exercise" selected>Übungsverlauf einer Übung</option>
+        </select>
+      </div>
+
+      <div class="progress-plan-title">
+        Übungsverlauf – {{ exercise_name }}
+        {% if plan_name %}
+          <span class="progress-plan-subtitle">(Plan: {{ plan_name }})</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <button type="button" class="btn btn--outline progress-close" id="btnClose">
+      X
+    </button>
+  </header>
+
+  <!-- Steuerbereich: Info + Aktionen -->
+  <section class="progress-controls">
+    <div class="progress-control-group">
+      <label>Übung:</label>
+      <span class="progress-plan-name">{{ exercise_name }}</span>
+      {% if plan_name %}
+        <span class="progress-plan-subtitle">(Plan: {{ plan_name }})</span>
+      {% endif %}
+    </div>
+
+    <div class="progress-controls__actions">
+      <button type="button" class="btn" id="btnShow">
+        Bild anzeigen
+      </button>
+      <button type="button" class="btn" id="btnExport">
+        Export (PNG)
+      </button>
+    </div>
+  </section>
+
+  <!-- Diagramm-Bereich -->
+  <section class="progress-chart">
+    <img
+      src="{% if plan_id %}
+               {{ url_for('progress.exercise_png', exercise_id=exercise_id, plan_id=plan_id) }}
+            {% else %}
+               {{ url_for('progress.exercise_png', exercise_id=exercise_id) }}
+            {% endif %}"
+      alt="Übungsverlauf für {{ exercise_name }}"
+      class="progress-chart__img"
+    >
+  </section>
+
+  <!-- Fußbereich: Zurück-Button -->
+  <footer class="progress-footer">
+    <button type="button" class="btn" id="btnBack">
+      Zurück
+    </button>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    function goHome() {
+      // Zur Startseite, von dort kann man wieder einen Plan / eine Übung wählen
+      window.location.href = "{{ url_for('index') }}";
+    }
+
+    var btnBack = document.getElementById("btnBack");
+    if (btnBack) {
+      btnBack.addEventListener("click", goHome);
+    }
+
+    var btnClose = document.getElementById("btnClose");
+    if (btnClose) {
+      btnClose.addEventListener("click", goHome);
+    }
+
+    var btnShow = document.getElementById("btnShow");
+    if (btnShow) {
+      btnShow.addEventListener("click", function () {
+        var url = "{% if plan_id %}{{ url_for('progress.exercise_png',
+                                              exercise_id=exercise_id,
+                                              plan_id=plan_id) }}{% else %}{{ url_for('progress.exercise_png',
+                                                                                       exercise_id=exercise_id) }}{% endif %}";
+        window.open(url, "_blank");
+      });
+    }
+
+    var btnExport = document.getElementById("btnExport");
+    if (btnExport) {
+      btnExport.addEventListener("click", function () {
+        var url = "{% if plan_id %}{{ url_for('progress.exercise_png',
+                                              exercise_id=exercise_id,
+                                              plan_id=plan_id) }}{% else %}{{ url_for('progress.exercise_png',
+                                                                                       exercise_id=exercise_id) }}{% endif %}";
+        window.location.href = url + "&download=1";
+      });
+    }
+
+    var diagramType = document.getElementById("diagramType");
+    if (diagramType) {
+      diagramType.addEventListener("change", function () {
+        if (this.value === "plan") {
+          // Zur Plan-Auswahl; von dort gelangt man zur Planansicht
+          window.location.href = "{{ url_for('index') }}";
+        }
+        // "exercise" bleibt auf dieser Seite.
+      });
+    }
+  })();
+</script>
 {% endblock %}

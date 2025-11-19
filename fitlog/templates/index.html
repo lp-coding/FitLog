@@ -136,10 +136,9 @@
 
   // Trainingsfortschritt -> /progress/plan/<id> (Matplotlib)
   btnProgress.addEventListener('click', () => {
-    const id = selId();
-    if (!id) return alert('Bitte einen Plan in der Liste auswählen.');
-    window.location.href = "/progress/plan/" + encodeURIComponent(id);
+  window.location.href = "{{ url_for('progress.overview') }}";
   });
+
 
   // Bearbeiten -> /plans/<id>/edit
   document.getElementById('btnEdit').addEventListener('click', () => {

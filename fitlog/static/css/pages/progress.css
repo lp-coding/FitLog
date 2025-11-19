@@ -1,0 +1,135 @@
+/* Progress-Seiten: Layout für Plan- und Übungsdiagramme */
+
+.progress-page {
+  max-width: 960px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+/* Kopfbereich */
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.progress-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.progress-app-title {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.progress-row label {
+  min-width: 90px;
+}
+
+.progress-select {
+  min-width: 260px;
+}
+
+.progress-plan-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.progress-plan-subtitle {
+  margin-left: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.progress-close {
+  align-self: flex-start;
+}
+
+/* Steuerbereich unter dem Kopf */
+
+.progress-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+
+.progress-control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.progress-control-group label {
+  min-width: 90px;
+}
+
+.progress-plan-name {
+  font-weight: 500;
+}
+
+.progress-controls__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Diagrammfläche */
+
+.progress-chart {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  background: #dbeafe; /* leichtes Blau, ähnlich dem Mockup */
+  min-height: 260px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.progress-chart__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* Fußbereich */
+
+.progress-footer {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Responsives Verhalten */
+
+@media (max-width: 720px) {
+  .progress-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .progress-controls__actions {
+    align-self: flex-end;
+  }
+}
