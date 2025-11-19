@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import io
 from typing import List, Tuple, Optional
-from flask import Blueprint, Response, render_template, request, abort
 from datetime import datetime
+
+from flask import Blueprint, Response, render_template, request, abort
 
 # Matplotlib im Headless-Mode
 import matplotlib
@@ -12,12 +13,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Hole get_db aus deinem Projekt.
-# Falls dein Pfad anders ist (z.B. fitlog.database.get_db), bitte anpassen:
 try:
     from fitlog.db import get_db  # bevorzugt
 except Exception:
-    # Fallback, wenn dein Projekt get_db woanders liegen hat:
-    from fitlog.database import get_db  # noqa: F401  # type: ignore
+    # Fallback, falls der Pfad sich mal ändert
+    from fitlog.database import get_db  # type: ignore  # noqa: F401
 
 progress_bp = Blueprint("progress", __name__, url_prefix="/progress")
 
@@ -28,7 +28,7 @@ progress_bp = Blueprint("progress", __name__, url_prefix="/progress")
 
 def _fetch_plan_name(db, plan_id: int) -> Optional[str]:
     row = db.execute(
-        "SELECT name FROM training_plans WHERE id = ? AND (deleted_at IS NULL)",
+        "SELECT name FROM training_plans WHERE id = ? AND deleted_at IS NULL",
         (plan_id,),
     ).fetchone()
     return row["name"] if row else None
@@ -45,13 +45,16 @@ def _fetch_exercise_name(db, exercise_id: int) -> Optional[str]:
 def _fetch_plan_exercises_with_latest_weight(db, plan_id: int) -> List[Tuple[str, float]]:
     """
     Liefert Liste von (exercise_name, latest_weight_kg) für alle Übungen eines Plans.
-    - latest_weight_kg: letztes erfasstes Gewicht aus session_records
-      (falls keine Erfassung existiert, 0.0 als Fallback).
+
+    latest_weight_kg:
+      - letztes erfasstes Gewicht aus session_entries / sessions
+      - falls keine Erfassung existiert, 0.0 als Fallback.
     """
     # 1) Alle Übungen im Plan (Reihenfolge via position, falls vorhanden)
     plan_rows = db.execute(
         """
-        SELECT e.id AS exercise_id, e.name AS exercise_name
+        SELECT e.id AS exercise_id, e.name AS exercise_name,
+               COALESCE(pe.default_weight_kg, 0) AS default_weight_kg
         FROM plan_exercises pe
         JOIN exercises e ON e.id = pe.exercise_id
         WHERE pe.plan_id = ?
@@ -63,47 +66,58 @@ def _fetch_plan_exercises_with_latest_weight(db, plan_id: int) -> List[Tuple[str
     if not plan_rows:
         return []
 
-    # 2) Für jede Übung: letztes Gewicht aus session_records für Sessions dieses Plans
+    # 2) Für jede Übung: letztes Gewicht aus session_entries/sessions für Sessions dieses Plans
     result: List[Tuple[str, float]] = []
     for r in plan_rows:
         ex_id = r["exercise_id"]
         ex_name = r["exercise_name"]
+        default_weight = float(r["default_weight_kg"])
 
         rec = db.execute(
             """
-            SELECT sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE ts.plan_id = ?
-              AND sr.exercise_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at) DESC, sr.id DESC
+            SELECT se.weight_kg
+            FROM session_entries se
+            JOIN sessions s ON s.id = se.session_id
+            WHERE s.plan_id = ?
+              AND se.exercise_id = ?
+              AND se.weight_kg IS NOT NULL
+            ORDER BY COALESCE(se.created_at, s.ended_at, s.started_at) DESC
             LIMIT 1
             """,
             (plan_id, ex_id),
         ).fetchone()
 
-        latest = float(rec["weight_kg"]) if rec and rec["weight_kg"] is not None else 0.0
+        if rec and rec["weight_kg"] is not None:
+            latest = float(rec["weight_kg"])
+        else:
+            latest = default_weight
+
         result.append((ex_name, latest))
 
     return result
 
 
-def _fetch_exercise_history(db, exercise_id: int, plan_id: Optional[int]) -> List[Tuple[str, float]]:
+def _fetch_exercise_history(
+    db,
+    exercise_id: int,
+    plan_id: Optional[int],
+) -> List[Tuple[str, float]]:
     """
-    Liefert Verlauf (ISO-Datum, Gewicht) für eine Übung. Optional nach Plan filterbar.
+    Liefert Verlauf (ISO-Datum, Gewicht) für eine Übung.
+    Optional nach Plan filterbar.
     Sortiert nach Datum/Zeit aufsteigend.
     """
     if plan_id:
         rows = db.execute(
             """
             SELECT
-                DATE(COALESCE(sr.created_at, ts.ended_at, ts.started_at)) AS day,
-                sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE sr.exercise_id = ?
-              AND ts.plan_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at, ts.started_at), sr.id
+                DATE(COALESCE(se.created_at, s.ended_at, s.started_at)) AS day,
+                se.weight_kg
+            FROM session_entries se
+            JOIN sessions s ON s.id = se.session_id
+            WHERE se.exercise_id = ?
+              AND s.plan_id = ?
+            ORDER BY COALESCE(se.created_at, s.ended_at, s.started_at)
             """,
             (exercise_id, plan_id),
         ).fetchall()
@@ -111,12 +125,12 @@ def _fetch_exercise_history(db, exercise_id: int, plan_id: Optional[int]) -> Lis
         rows = db.execute(
             """
             SELECT
-                DATE(COALESCE(sr.created_at, ts.ended_at, ts.started_at)) AS day,
-                sr.weight_kg
-            FROM session_records sr
-            JOIN training_sessions ts ON ts.id = sr.session_id
-            WHERE sr.exercise_id = ?
-            ORDER BY COALESCE(sr.created_at, ts.ended_at, ts.started_at), sr.id
+                DATE(COALESCE(se.created_at, s.ended_at, s.started_at)) AS day,
+                se.weight_kg
+            FROM session_entries se
+            JOIN sessions s ON s.id = se.session_id
+            WHERE se.exercise_id = ?
+            ORDER BY COALESCE(se.created_at, s.ended_at, s.started_at)
             """,
             (exercise_id,),
         ).fetchall()
@@ -168,12 +182,13 @@ def exercise_view(exercise_id: int):
 
 
 # ---------------------------
-# PNG-Render-Endpunkte
+# PNG-Endpoints
 # ---------------------------
 
 @progress_bp.get("/plan/<int:plan_id>/png")
 def plan_png(plan_id: int):
     """
+    PNG für einen Plan zeichnen.
     Balkendiagramm: aktuelles (zuletzt erfasstes) Gewicht je Übung im Plan.
     Optional: ?download=1 setzt Attachment-Header.
     """
@@ -205,25 +220,27 @@ def plan_png(plan_id: int):
     if download:
         safe_name = plan_name.replace('"', "'")
         headers["Content-Disposition"] = f'attachment; filename="progress_plan_{safe_name}.png"'
+
     return Response(buf.getvalue(), mimetype="image/png", headers=headers)
 
 
 @progress_bp.get("/exercise/<int:exercise_id>/png")
 def exercise_png(exercise_id: int):
     """
-    Liniendiagramm: Gewichtsverlauf einer Übung.
-    Optionaler Filter: ?plan_id=123
-    Optional: ?download=1
+    PNG für eine Übung zeichnen.
+    Liniendiagramm: Gewicht über die Zeit.
+    Optional: ?plan_id=... zum Filtern, ?download=1 für Attachment-Header.
     """
     plan_id = request.args.get("plan_id", type=int)
+
     db = get_db()
     exercise_name = _fetch_exercise_name(db, exercise_id)
     if not exercise_name:
         abort(404, "Exercise not found")
 
-    hist = _fetch_exercise_history(db, exercise_id, plan_id)
-    dates = [d for d, _ in hist]
-    weights = [w for _, w in hist]
+    history = _fetch_exercise_history(db, exercise_id, plan_id)
+    dates = [datetime.strptime(day, "%Y-%m-%d").date() for day, _ in history]
+    weights = [w for _, w in history]
 
     fig, ax = plt.subplots(figsize=(7.5, 3.2), dpi=140)
 
@@ -241,11 +258,12 @@ def exercise_png(exercise_id: int):
         plan_name = _fetch_plan_name(db, plan_id)
         if plan_name:
             title += f" (Plan: {plan_name})"
+
     ax.set_title(title)
     ax.set_ylabel("Weight (kg)")
     ax.set_xlabel("Date")
     ax.grid(True, linestyle=":", alpha=0.4)
-    plt.xticks(rotation=20, ha="right")
+    fig.autofmt_xdate()
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -258,5 +276,5 @@ def exercise_png(exercise_id: int):
     if download:
         base = exercise_name.replace('"', "'")
         suffix = f"_plan{plan_id}" if plan_id else ""
-        headers["Content-Disposition"] = f'attachment; filename="progress_exercise_{base}{suffix}.png"'
+        headers["Content-Disposition"] = f'attachment; filename=\"progress_exercise_{base}{suffix}.png\"'
     return Response(buf.getvalue(), mimetype="image/png", headers=headers)

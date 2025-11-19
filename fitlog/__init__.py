@@ -1,52 +1,55 @@
 from pathlib import Path
 from flask import Flask, render_template
 
+
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
+    # Basis-Konfiguration
     app.config.from_mapping(
         SECRET_KEY="dev",
+        DATABASE=str(Path(app.instance_path) / "fitlog.db"),
     )
 
-    # Optionale Instanz-Config (wenn vorhanden)
-    app.config.from_pyfile("config.py", silent=True)
-
+    # Test-Config überschreibt alles (z. B. für Tests)
     if test_config:
         app.config.update(test_config)
 
+    # Instance-Ordner sicherstellen
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
+    # DB-Initialisierung / Teardown
     from .db import close_db, get_db
     app.teardown_appcontext(close_db)
 
+    # Healthcheck
     @app.get("/health")
     def health():
         _ = get_db()
         return {"status": "ok"}
 
+    # Startseite
     @app.get("/")
     def index():
-        # Startseite anzeigen
-        from .db import get_db
         db = get_db()
 
+        # Nur aktive Pläne anzeigen
         plans = db.execute(
-            "SELECT id, name FROM training_plans WHERE deleted_at IS NULL ORDER BY name"
+            """
+            SELECT id, name
+              FROM training_plans
+             WHERE deleted_at IS NULL
+             ORDER BY name
+            """
         ).fetchall()
 
-        last_session = db.execute(
-            """
-            SELECT s.id, s.started_at, s.ended_at, p.name AS plan_name
-            FROM sessions s
-                     JOIN training_plans p ON p.id = s.plan_id
-            ORDER BY COALESCE(s.ended_at, s.started_at) DESC LIMIT 1
-            """
-        ).fetchone()
-
+        # Zuletzt abgeschlossene oder gestartete Session
         from fitlog.services.last_session import get_last_session
         last_session = get_last_session(db)
+
         return render_template("index.html", plans=plans, last_session=last_session)
 
+    # Blueprints registrieren
     from .blueprints.plans import bp as plans_bp
     app.register_blueprint(plans_bp)
 

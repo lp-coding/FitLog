@@ -72,7 +72,6 @@ def edit_plan(plan_id: int):
         """
         SELECT e.id              AS exercise_id,
                e.name            AS name,
-               e.muscle_group    AS muscle_group,
                pe.position       AS position,
                COALESCE(pe.default_sets, 3)      AS default_sets,
                COALESCE(pe.default_reps, 10)     AS default_reps,

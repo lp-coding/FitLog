@@ -107,6 +107,53 @@ def _load_record_items(db: sqlite3.Connection, session_id: int) -> List[sqlite3.
     return db.execute(sql, (session_id,)).fetchall()
 
 
+def _update_plan_defaults_from_session(
+    db: sqlite3.Connection,
+    plan_id: int,
+    session_id: int,
+) -> None:
+    """Update per-plan default weights from the latest session.
+
+    Für jede Übung, die in dieser Session mit einem positiven Gewicht
+    geloggt wurde, wird das entsprechende `default_weight_kg` im
+    `plan_exercises`-Eintrag des zugehörigen Plans aktualisiert.
+
+    Effekt: Beim nächsten Training werden automatisch die zuletzt
+    geschafften Gewichte als Standard vorgeschlagen.
+    """
+    rows = db.execute(
+        """
+        SELECT exercise_id, weight_kg
+          FROM session_entries
+         WHERE session_id = ?
+           AND weight_kg IS NOT NULL
+        """,
+        (session_id,),
+    ).fetchall()
+
+    for row in rows:
+        weight = row["weight_kg"]
+        ex_id = row["exercise_id"]
+
+        # Nur sinnvolle, positive Gewichte übernehmen
+        try:
+            w = float(weight)
+        except (TypeError, ValueError):
+            continue
+        if w <= 0:
+            continue
+
+        db.execute(
+            """
+            UPDATE plan_exercises
+               SET default_weight_kg = ?
+             WHERE plan_id     = ?
+               AND exercise_id = ?
+            """,
+            (w, plan_id, ex_id),
+        )
+
+
 def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any]) -> None:
     """
     Write one aggregate row per exercise into session_entries.
@@ -159,51 +206,56 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
         weight_key = f"weight_{ex_id}"
         note_key   = f"note_{ex_id}"
 
-        # Defaults
-        sets_val: Optional[int] = None  # None = unbekannt / nicht gesetzt
-        reps = 0
-        weight = 0.0
-        note = ""
+        # Basiswerte
+        sets_val: Optional[int] = None
+        reps: Optional[int] = None
+        weight: Optional[float] = None
+        note: str = ""
 
-        # Flache Form zuerst lesen
-        if sets_key in form:
-            try:
-                sets_val = max(0, min(99, int(str(form[sets_key]).strip())))
-            except ValueError:
-                sets_val = 0
+        # 1. Versuch: geparstes Dict verwenden
+        payload: Dict[str, Any] = parsed.get(ex_id, {})
 
-        if reps_key in form:
-            try:
-                reps = max(0, int(str(form[reps_key]).strip()))
-            except ValueError:
-                reps = 0
-
-        if weight_key in form:
-            try:
-                weight = max(0.0, float(str(form[weight_key]).replace(",", ".").strip()))
-            except ValueError:
-                weight = 0.0
-
-        if note_key in form:
-            note = (form[note_key] or "").strip()
-
-        # Parser-Werte (verschachtelte ex[<id>][...]) haben Priorität
-        payload = parsed.get(ex_id, {})
         if "sets" in payload:
             try:
-                sets_val = max(0, min(99, int(payload.get("sets", 0))))
-            except Exception:
-                sets_val = 0
+                sets_val = int(payload.get("sets"))
+            except (TypeError, ValueError):
+                sets_val = None
+        elif sets_key in form:
+            raw_sets = form.get(sets_key)
+            if raw_sets:
+                try:
+                    sets_val = int(raw_sets)
+                except ValueError:
+                    sets_val = None
+
         if "reps" in payload:
             try:
-                reps = max(0, int(payload.get("reps", reps)))
-            except Exception:
-                reps = reps
+                reps = int(payload.get("reps"))
+            except (TypeError, ValueError):
+                reps = None
+        elif reps_key in form:
+            raw_reps = form.get(reps_key)
+            if raw_reps:
+                try:
+                    reps = int(raw_reps)
+                except ValueError:
+                    reps = None
+
         if "weight" in payload:
             try:
-                weight = max(0.0, float(str(payload.get("weight", weight)).replace(",", ".")))
-            except Exception:
-                weight = weight
+                weight = float(str(payload.get("weight")).replace(",", "."))
+            except (TypeError, ValueError):
+                weight = None
+        elif weight_key in form:
+            raw_weight = form.get(weight_key)
+            if raw_weight:
+                try:
+                    weight = float(str(raw_weight).replace(",", "."))
+                except ValueError:
+                    weight = None
+
+        if note_key in form:
+            note = str(form.get(note_key) or "").strip()
         if "note" in payload:
             note = str(payload.get("note", note) or "").strip()
 
@@ -217,11 +269,9 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
             continue
 
         # Dynamisches INSERT/UPSERT (mit optionaler Spalte 'sets')
-        columns = ["session_id", "exercise_id", "weight_kg", "reps", "note", "created_at"]
         values = [session_id, ex_id, weight, reps, note, _utcnow_iso()]
         if has_se_sets:
             # wir fügen 'sets' vor 'note' ein (Reihenfolge egal, aber semantisch schöner)
-            insert_cols = ["session_id", "exercise_id", "weight_kg", "reps", "sets", "note", "created_at"]
             insert_vals = [session_id, ex_id, weight, reps, (sets_val if sets_val is not None else 3), note, _utcnow_iso()]
             sql = """
                 INSERT INTO session_entries (session_id, exercise_id, weight_kg, reps, sets, note, created_at)
@@ -249,17 +299,29 @@ def _upsert_entries(db: sqlite3.Connection, session_id: int, form: Dict[str, Any
 
 
 # ------------------------------
-# Routes
+# Routen
 # ------------------------------
-@bp.get("/new", endpoint="new_session")
+@bp.get("/new")
 def new_session():
-    """Neue Session starten – nur mit plan_id."""
-    plan_id = request.args.get("plan_id", type=int)
-    if not plan_id:
-        flash("Bitte zuerst einen Trainingsplan auswählen.", "info")
-        return redirect(url_for("index"))
-
+    """Neue Session für einen Plan anlegen und zur Erfassungsmaske springen."""
     db = get_db()
+
+    # plan_id aus Query-Param (?plan_id=...)
+    plan_id = request.args.get("plan_id", type=int)
+    if plan_id is None:
+        db.close()
+        abort(400, description="plan_id is required")
+
+    # prüfen, ob Plan existiert
+    plan = db.execute(
+        "SELECT id, name FROM training_plans WHERE id = ? AND deleted_at IS NULL",
+        (plan_id,),
+    ).fetchone()
+
+    if not plan:
+        db.close()
+        abort(404)
+
     started_at = _utcnow_iso()
     cur = db.execute(
         "INSERT INTO sessions (plan_id, started_at) VALUES (?, ?)",
@@ -272,28 +334,33 @@ def new_session():
     return redirect(url_for("sessions.record_session", session_id=session_id))
 
 
+
 @bp.get("/<int:session_id>/record")
 def record_session(session_id: int):
-    """Trainingsdaten erfassen-Formular anzeigen (eine Zeile je Übung)."""
+    """Erfassungsmaske für eine laufende Session anzeigen."""
     db = get_db()
     sess = _load_session(db, session_id)
     items = _load_record_items(db, session_id)
     db.close()
-
-    # started_at schön formatieren
-    started_display = sess["started_at"]
-    try:
-        started_display = datetime.fromisoformat(started_display).strftime("%d.%m.%Y %H:%M:%S")
-    except Exception:
-        pass
-
     return render_template(
         "sessions/record.html",
-        sess=sess,
-        started_display=started_display,
+        session=sess,  # optional alias, falls irgendwo 'session' verwendet wird
+        sess=sess,     # wichtig: so heißt es im Template
         items=items,
-        defaults={},
     )
+
+
+
+@bp.post("/<int:session_id>/record")
+def record_session_post(session_id: int):
+    """Zwischenspeichern der Eingaben, Session bleibt offen."""
+    db = get_db()
+    _ = _load_session(db, session_id)
+    _upsert_entries(db, session_id, request.form)
+    db.commit()
+    db.close()
+    flash("Zwischenspeicherung erfolgreich", "success")
+    return redirect(url_for("sessions.record_session", session_id=session_id))
 
 
 @bp.post("/<int:session_id>/finish")
@@ -331,9 +398,12 @@ def finish_session(session_id: int):
             (_utcnow_iso(), session_id),
         )
 
+    # Nach Abschluss der Session: Standardgewichte im Plan aktualisieren
+    _update_plan_defaults_from_session(db, sess["plan_id"], session_id)
+
     db.commit()
     db.close()
-    flash("Training wurde gespeichert ✅", "success")
+    flash("Training wurde gespeichert", "success")
     return redirect(url_for("index"))
 
 

@@ -1,31 +1,73 @@
+from __future__ import annotations
+
+"""
+Seed-Skript für FitLog.
+
+Dieses Skript fügt typische Fitnessstudio-Übungen in die Tabelle `exercises` ein.
+
+Ausführung:
+    python seed.py
+
+Voraussetzung:
+    - Die Datenbank wurde vorher mit `init_db.py` und `instance/001_init.sql`
+      initialisiert.
+"""
+
 import sqlite3
 from pathlib import Path
 
+# Pfad zur SQLite-Datenbank – konsistent zu init_db.py / create_app
+DB_PATH = Path("instance/fitlog.db")
 
-def seed_database() -> None:
-    db_path = Path("instance/fitlog.db")
-    if not db_path.exists():
-        print("Datenbank nicht gefunden. Bitte zuerst init_db.py ausführen.")
+# Typische Studio-Übungen (deutschsprachige Namen)
+EXERCISES: list[str] = [
+    "Kniebeugen",
+    "Beinpresse",
+    "Kreuzheben",
+    "Bankdrücken",
+    "Schrägbankdrücken",
+    "Rudern vorgebeugt",
+    "Latziehen zur Brust",
+    "Rudern am Kabel",
+    "Schulterdrücken",
+    "Seitheben",
+    "Bizepscurls",
+    "Trizepsdrücken am Kabel",
+    "Plank",
+    "Crunches",
+]
+
+
+def seed_exercises(conn: sqlite3.Connection) -> None:
+    """Fügt typische Übungen in `exercises` ein (idempotent)."""
+    conn.execute("PRAGMA foreign_keys = ON;")
+
+    for name in EXERCISES:
+        conn.execute(
+            "INSERT OR IGNORE INTO exercises (name) VALUES (?)",
+            (name,),
+        )
+
+    count = conn.execute("SELECT COUNT(*) FROM exercises").fetchone()[0]
+    print(f"Tabelle `exercises` enthält jetzt {count} Übungen.")
+
+
+def main() -> None:
+    if not DB_PATH.exists():
+        print(f"Datenbank '{DB_PATH}' existiert nicht.")
+        print("   Bitte zuerst `python init_db.py` ausführen.")
         return
 
-    con = sqlite3.connect(db_path)
-    cur = con.cursor()
+    print(f"Verwende Datenbank: {DB_PATH.resolve()}")
 
-    # Beispiel-Datensätze
-    exercises = [
-        ("Bankdrücken", "Brust"),
-        ("Kniebeugen", "Beine"),
-        ("Klimmzüge", "Rücken"),
-    ]
-    cur.executemany("INSERT INTO exercises (name, muscle_group) VALUES (?, ?)", exercises)
-
-    plans = [("Oberkörper",), ("Ganzkörper",)]
-    cur.executemany("INSERT INTO training_plans (name) VALUES (?)", plans)
-
-    con.commit()
-    con.close()
-    print("Seed-Daten erfolgreich eingetragen.")
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        seed_exercises(conn)
+        conn.commit()
+        print("Seeding abgeschlossen.")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
-    seed_database()
+    main()

@@ -11,8 +11,11 @@ def init_db():
     with sqlite3.connect(db_path) as connection:
         with open(sql_path, "r", encoding="utf-8") as f:
             sql_script = f.read()
-        connection.executescript(sql_script)
-        connection.commit()
+        try:
+            connection.executescript(sql_script)
+            connection.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Fehler beim Initialisieren der Datenbank: {e}")
 
     print("Datenbank wurde erfolgreich erstellt und initialisiert.")
 
